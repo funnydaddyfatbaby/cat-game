@@ -92,8 +92,7 @@ async function removeBg(blob, onProgress){
   const fn = await ensureRemoveBg();
   const out = await fn(blob, {
     publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
-    model: 'isnet_quint8',           // smallest/fastest model — much better on mobile
-    output: { format: 'image/png' },
+    output: { format: 'image/png' },   // use library default model (verified to work on this path)
     progress: (key, cur, total)=>{ if(onProgress && total) onProgress(Math.min(1, cur/total)); }
   });
   return out; // Blob (transparent PNG)
@@ -328,34 +327,64 @@ async function save(){
     note: ''
   };
   await DB.put(cat); await refreshCats(); refreshAll();
-  pending = null;
+  pending = null; bookIndex = 0;   // show the newest cat first
   toast('已收进图鉴 🐾'); await wait(700); go('book');
 }
 
-/* ============================ collection ============================ */
-let bookSort = 'recent';
+/* ============================ collection (swipeable card stack) ============================ */
+const CARD_TINTS = ['#ece4d8','#dde4ea','#e8e0e9','#e2e9e1','#efe7da','#e6e2dd'];
+let bookIndex = 0;
+function cardTransform(off, dx, rot){
+  if(off===0) return `translateX(${dx}px) rotate(${rot}deg)`;
+  const scale = 1 - off*0.055, ty = off*16, r = off===1 ? 2.6 : -2.6;
+  return `translateY(${ty}px) scale(${scale}) rotate(${r}deg)`;
+}
+function makeCard(cat, off){
+  const tint = CARD_TINTS[(bookIndex+off) % CARD_TINTS.length];
+  const thumb = cat.thumbBlob || cat.cutBlob;
+  const place = cat.place ? (cat.place.district || cat.place.city || '') : '未定位';
+  const card = document.createElement('div');
+  card.className = 'swipe-card'; card.dataset.off = off; card.dataset.id = cat.id;
+  card.style.setProperty('--tint', tint);
+  card.style.zIndex = String(30 - off);
+  card.style.transform = cardTransform(off, 0, 0);
+  card.innerHTML = `<div class="card-photo">${thumb?`<img class="die-cut" src="${objURL(thumb)}">`:'🐱'}</div>
+    <div class="card-info"><h3>${escapeHtml(cat.nickname)}</h3><div class="sub">${escapeHtml(cat.breed)} · ${escapeHtml(place)}</div></div>`;
+  return card;
+}
+function attachSwipe(card){
+  let startX=0, dx=0, dragging=false, moved=false;
+  card.addEventListener('pointerdown', e=>{ dragging=true; moved=false; dx=0; startX=e.clientX; card.style.transition='none'; try{card.setPointerCapture(e.pointerId);}catch(_){} });
+  card.addEventListener('pointermove', e=>{ if(!dragging) return; dx=e.clientX-startX; if(Math.abs(dx)>6) moved=true; card.style.transform=cardTransform(0, dx, dx/18); });
+  const end = ()=>{
+    if(!dragging) return; dragging=false; card.style.transition='transform .32s cubic-bezier(.2,.8,.3,1)';
+    if(!moved){ openDetail(card.dataset.id); return; }
+    const W = card.offsetWidth || 300;
+    if(dx < -80 && bookIndex < CATS.length-1){ card.style.transform=cardTransform(0,-W*1.5,-18); setTimeout(()=>{ bookIndex++; renderCollection(); },170); }
+    else if(dx > 80 && bookIndex > 0){ card.style.transform=cardTransform(0, W*1.5, 18); setTimeout(()=>{ bookIndex--; renderCollection(); },170); }
+    else { card.style.transform=cardTransform(0,0,0); }
+  };
+  card.addEventListener('pointerup', end);
+  card.addEventListener('pointercancel', end);
+}
 function renderCollection(){
-  const grid = $('grid'), empty = $('book-empty');
-  $('book-sub').textContent = `${CATS.length} 只`;
-  grid.innerHTML = '';
+  const wrap = $('stack-wrap'), hint = $('stack-hint');
+  wrap.innerHTML = '';
   if(!CATS.length){
-    empty.innerHTML = `<div class="empty-state"><div class="big">🐾</div><p>还没有收藏任何猫<br>点下方快门，记录第一只吧</p></div>`;
+    $('book-sub').textContent = '';
+    hint.textContent = '';
+    wrap.innerHTML = `<div class="empty-state"><div class="big">🐾</div><p>还没有收藏任何猫<br>点下方快门，记录第一只吧</p></div>`;
     return;
   }
-  empty.innerHTML = '';
-  let list = CATS.slice();
-  if(bookSort==='place') list.sort((a,b)=>(a.place?a.place.label:'~').localeCompare(b.place?b.place.label:'~','zh'));
-  else if(bookSort==='breed') list.sort((a,b)=>(a.breed||'~').localeCompare(b.breed||'~','zh'));
-  else list.sort((a,b)=>b.lastSeen-a.lastSeen);
-
-  list.forEach(cat=>{
-    const card = document.createElement('div'); card.className='catcard'; card.onclick=()=>openDetail(cat.id);
-    const place = cat.place ? (cat.place.district || cat.place.city || '') : '未定位';
-    const thumb = cat.thumbBlob || cat.cutBlob;
-    card.innerHTML = `<div class="ph">${thumb?`<img class="die-cut" src="${objURL(thumb)}">`:'🐱'}</div>
-      <div class="meta"><b>${escapeHtml(cat.nickname)}</b><small>${escapeHtml(cat.breed)} · ${escapeHtml(place)}</small></div>`;
-    grid.appendChild(card);
-  });
+  if(bookIndex < 0) bookIndex = 0;
+  if(bookIndex > CATS.length-1) bookIndex = CATS.length-1;
+  $('book-sub').textContent = `${CATS.length} 只`;
+  hint.textContent = `${bookIndex+1} / ${CATS.length} · 左右滑动切换，点击看详情`;
+  // build back-to-front so the current card ends up on top and interactive
+  const maxOff = Math.min(2, CATS.length-1-bookIndex);
+  for(let off=maxOff; off>=0; off--){ wrap.appendChild(makeCard(CATS[bookIndex+off], off)); }
+  const front = wrap.querySelector('.swipe-card[data-off="0"]');
+  if(front) attachSwipe(front);
 }
 
 /* ============================ detail ============================ */
@@ -364,6 +393,7 @@ async function openDetail(id){
   const cat = await DB.get(id); if(!cat) return;
   currentDetailId = id;
   $('d-hero-img').src = objURL(cat.cutBlob || cat.thumbBlob);
+  const dt = $('d-title'); if(dt) dt.textContent = cat.nickname;
   $('d-name').textContent = cat.nickname;
   $('d-breed').textContent = cat.breed + (cat.breedConf?` · 置信度 ${cat.breedConf}%`:'');
   $('d-place').textContent = cat.place ? cat.place.label : '未定位';
@@ -503,16 +533,12 @@ Object.assign(window, { go, capture, save, markSame, dismissMatch, retryLocate, 
 /* ============================ init ============================ */
 async function init(){
   paintIcons();
-  // filter chips
-  $('filterbar').querySelectorAll('.chip').forEach(chip=>{
-    chip.onclick = ()=>{ $('filterbar').querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); chip.classList.add('on'); bookSort=chip.dataset.sort; renderCollection(); };
-  });
   // photo-from-album fallback
   $('cam-file').addEventListener('change', e=>{ const f=e.target.files&&e.target.files[0]; if(f) startPipeline(f); e.target.value=''; });
 
   await refreshCats();
   updateStatPill();
-  onEnter('map'); // default screen
+  onEnter('book'); // default screen: 图鉴
 
   // PWA service worker
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
