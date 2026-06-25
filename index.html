@@ -113,6 +113,34 @@
   .photo-card .cap{font-weight:800;margin-top:10px;font-size:16px;}
   .photo-card .sub{color:#888;font-size:12px;}
 
+  /* 喜好线索 */
+  .hint-chip{margin-top:10px;background:#2a2210;border:1px solid #5a4720;color:var(--accent);
+    border-radius:12px;padding:9px 12px;font-size:13px;display:flex;align-items:center;gap:6px;}
+
+  /* 道具选择器 */
+  .picker-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
+  .item-row{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:14px;padding:11px 13px;cursor:pointer;transition:.15s;}
+  .item-row:active{transform:scale(.98);}
+  .item-row.disabled{opacity:.4;pointer-events:none;}
+  .item-row .ie{font-size:30px;width:42px;text-align:center;flex:0 0 auto;}
+  .item-row .info{flex:1;min-width:0;}
+  .item-row .iname{font-weight:700;font-size:15px;}
+  .item-row .idesc{font-size:12px;color:var(--sub);margin-top:1px;}
+  .item-row .cnt{font-size:13px;color:var(--sub);flex:0 0 auto;}
+  .aff-badge{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700;margin-left:6px;}
+  .aff-love{background:#1d3a26;color:var(--good);}
+  .aff-hate{background:#3a1d28;color:var(--bad);}
+  .aff-mid{background:var(--panel);color:var(--sub);}
+
+  /* 背包格子（猫窝里） */
+  .bag{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;}
+  .bag .slot{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 4px;text-align:center;position:relative;}
+  .bag .slot .be{font-size:26px;}
+  .bag .slot .bn{font-size:10px;color:var(--sub);margin-top:2px;}
+  .bag .slot .bc{position:absolute;top:4px;right:6px;font-size:11px;font-weight:800;color:var(--accent);}
+  .sec-title{font-size:13px;color:var(--sub);margin:16px 0 0;font-weight:700;}
+
   /* toast */
   #toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%) translateY(20px);z-index:4000;
     background:#000c;border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:14px;
@@ -160,15 +188,26 @@
     <div class="stat"><div class="lbl"><span>心情</span><span id="cMoodV">0%</span></div><div class="bar mood"><i id="cMood"></i></div></div>
     <div class="stat"><div class="lbl"><span>警惕值（越低越好领养）</span><span id="cAlertV">0%</span></div><div class="bar alert"><i id="cAlert"></i></div></div>
 
+    <div class="hint-chip" id="cHint">💡 线索加载中…</div>
     <div class="speech" id="cSpeech"><span class="react">💭</span><span id="cSpeechT">它正在打量你…</span></div>
 
     <div class="actions">
       <div class="act" data-act="feed">🍗 投喂</div>
-      <div class="act" data-act="tease">🪶 调戏</div>
+      <div class="act" data-act="tease">🪶 逗它</div>
       <div class="act" data-act="photo">📷 拍照</div>
       <div class="act" data-act="pet">🤚 撸一撸</div>
       <button class="act adopt" data-act="adopt" id="adoptBtn">🏠 领养（好感≥80 且 警惕≤30）</button>
     </div>
+  </div>
+</div>
+
+<!-- 道具选择器 -->
+<div class="sheet-mask" id="pickerSheet">
+  <div class="sheet">
+    <div class="grabber"></div>
+    <h2 id="pkTitle">选择道具</h2>
+    <div class="muted" id="pkTip">选对道具才能事半功倍～</div>
+    <div class="picker-list" id="pkList"></div>
   </div>
 </div>
 
@@ -179,6 +218,8 @@
     <h2>我的猫窝</h2>
     <div class="muted">已领养的猫咪会永久保存在本机</div>
     <div class="grid" id="petGrid"></div>
+    <div class="sec-title">🎒 我的背包</div>
+    <div class="bag" id="bagGrid"></div>
   </div>
 </div>
 
@@ -222,6 +263,25 @@ const PERSONAS = {
 const PERSONA_KEYS = Object.keys(PERSONAS);
 const NAMES = ['布丁','可乐','奥利奥','团子','花卷','麻薯','大橘','咪咪','煤球','雪球','糯米','三斤','土豆','芝麻','虎子','汤圆','拿铁','曲奇'];
 
+/* ============ 道具系统 ============
+   aff:好感基础区间  mood:心情  alertDown:降低警惕(正数=降)
+   loves:遇到这些性格效果翻倍且更亲近   hates:遇到这些性格会反效果/炸毛
+*/
+const ITEMS = {
+  // —— 食物（投喂）——
+  dryfish:{name:'小鱼干', emoji:'🐟', type:'food', aff:[6,11],  mood:4,  alertDown:6,  loves:['贪吃'],            hates:[],            desc:'最朴实的诚意'},
+  can:    {name:'猫罐头', emoji:'🥫', type:'food', aff:[9,15],  mood:5,  alertDown:8,  loves:['贪吃','粘人'],     hates:[],            desc:'肉香四溢，谁都爱'},
+  freeze: {name:'冻干',   emoji:'🍤', type:'food', aff:[8,13],  mood:4,  alertDown:12, loves:['傲娇','慵懒'],     hates:[],            desc:'高级货，挑嘴的也买账'},
+  catnip: {name:'猫薄荷', emoji:'🌿', type:'food', aff:[4,8],   mood:14, alertDown:18, loves:['胆小','暴躁','慵懒'], hates:[],         desc:'放松神器，大幅降警惕'},
+  grill:  {name:'烤鱼',   emoji:'🍢', type:'food', aff:[14,20], mood:8,  alertDown:10, loves:['傲娇','贪吃','粘人','好奇','胆小','暴躁','慵懒'], hates:[], desc:'稀有大餐，没有猫能拒绝', rare:true},
+  // —— 玩具（逗它）——
+  wand:   {name:'逗猫棒', emoji:'🪶', type:'toy',  aff:[6,12],  mood:12, alertDown:2,  loves:['好奇','粘人'],     hates:['暴躁','胆小'], desc:'活泼猫的最爱，胆小/暴躁慎用'},
+  laser:  {name:'激光笔', emoji:'🔴', type:'toy',  aff:[8,13],  mood:14, alertDown:0,  loves:['好奇','贪吃'],     hates:['慵懒'],        desc:'刺激，懒猫懒得理你'},
+  yarn:   {name:'毛线球', emoji:'🧶', type:'toy',  aff:[5,10],  mood:10, alertDown:4,  loves:['好奇','粘人','慵懒'], hates:[],          desc:'温和安全，老少咸宜'},
+  box:    {name:'纸箱',   emoji:'📦', type:'toy',  aff:[5,9],   mood:10, alertDown:16, loves:['暴躁','胆小','慵懒'], hates:[],          desc:'安全屋！能安抚警惕的猫'},
+};
+const START_BAG = {dryfish:5, can:2, freeze:1, catnip:2, grill:0, wand:3, laser:1, yarn:2, box:1};
+
 /* ============ 工具 ============ */
 const $=s=>document.querySelector(s);
 const rnd=(a,b)=>Math.random()*(b-a)+a;
@@ -236,7 +296,10 @@ function save(k,v){localStorage.setItem(k,JSON.stringify(v))}
 /* ============ 状态 ============ */
 let map, meMarker, myPos=null, cats=[], activeCat=null;
 let pets = load('catgo_pets', []);
+let bag = load('catgo_bag', null) || {...START_BAG};
 $('#petCount').textContent = pets.length;
+function saveBag(){save('catgo_bag',bag);}
+function affinity(item,persona){return item.loves.includes(persona)?'love':(item.hates.includes(persona)?'hate':'mid');}
 
 /* ============ 生成野猫 ============ */
 function makeCat(lat,lng){
@@ -264,32 +327,52 @@ function spawnCats(){
     c.marker.on('click',()=>openCat(c));
     cats.push(c);
   }
-  toast(`你的周围出现了 ${n} 只野猫！`);
+  // 巡逻补给：基础口粮 + 随机道具，偶尔掉稀有烤鱼
+  bag.dryfish=(bag.dryfish||0)+2;
+  const drop=pick(['can','catnip','wand','yarn','box','laser','freeze']);
+  bag[drop]=(bag[drop]||0)+1;
+  let supplyMsg=`补给：🐟小鱼干×2、${ITEMS[drop].emoji}${ITEMS[drop].name}×1`;
+  if(Math.random()<0.15){ bag.grill=(bag.grill||0)+1; supplyMsg+='、🍢烤鱼×1'; }
+  saveBag();
+  toast(`出现 ${n} 只野猫！${supplyMsg}`);
 }
 
 /* ============ 互动 ============ */
-function react(c,act){
-  const p=PERSONAS[c.persona];
-  let dAff=0, dAlert=0, dMood=0, msg='', emo='💭';
-  if(act==='feed'){
-    c.fed++;
-    const eff=c.fed>2?.4:1; // 喂多了边际递减
-    dAff=ri(...p.feed)*eff; dAlert=-ri(4,10)*p.alert; dMood=ri(2,10);
-    emo=dAff>5?'😻':(dAff<0?'🙄':'😼');
-  }else if(act==='tease'){
-    dAff=ri(...p.tease); dAlert=ri(2,10)*p.alert; dMood=dAff>0?ri(4,12):ri(-12,-2);
-    emo=dAff>5?'😸':(dAff<-8?'🙀':'😾');
-  }else if(act==='pet'){
-    const ok=c.alert<60; // 警惕高时不让摸
-    if(!ok){dAff=-ri(3,8);dAlert=ri(4,10);emo='🙀';msg='它警惕地后退，不让你碰。';}
-    else{dAff=ri(...p.pet);dAlert=-ri(2,8);dMood=ri(4,12);emo=dAff>6?'😽':'😺';}
+// 使用道具（投喂/逗它）
+function useItem(c,key){
+  if((bag[key]||0)<=0){toast('这个道具用完了～');return;}
+  bag[key]--; saveBag();
+  const item=ITEMS[key];
+  const aff=affinity(item,c.persona);
+  c.fed=(c.fed||0)+1;
+  const ditch=c.fed>3?.5:1; // 反复同一只边际递减
+  let dAff,dAlert,dMood,emo,msg;
+  if(aff==='love'){
+    dAff=ri(...item.aff)*1.6*ditch; dAlert=-(item.alertDown+8); dMood=item.mood+6;
+    emo='😻'; msg=`正中下心！${c.name}超喜欢${item.name}。`;
+  }else if(aff==='hate'){
+    dAff=-ri(...item.aff)*0.6; dAlert=item.type==='toy'?ri(10,16):ri(2,6); dMood=-ri(6,12);
+    emo=item.type==='toy'?'🙀':'😾';
+    msg=item.type==='toy'?`${c.name}被吓得炸毛了！这玩具不适合它。`:`${c.name}对${item.name}不屑一顾。`;
+  }else{
+    dAff=ri(...item.aff)*ditch; dAlert=-item.alertDown; dMood=item.mood;
+    emo=dAff>8?'😸':'😺'; msg=pick(PERSONAS[c.persona].quip);
   }
+  applyDelta(c,dAff,dAlert,dMood,emo,msg);
+}
+// 撸一撸（免费动作，警惕高时失败）
+function petCat(c){
+  const p=PERSONAS[c.persona];
+  let dAff,dAlert,dMood,emo,msg;
+  if(c.alert>=60){dAff=-ri(3,8);dAlert=ri(4,10);dMood=-ri(2,6);emo='🙀';msg='它还很警惕，不让你碰。先用食物或纸箱安抚下吧。';}
+  else{dAff=ri(...p.pet);dAlert=-ri(2,8);dMood=ri(4,12);emo=dAff>6?'😽':'😺';msg=pick(p.quip);}
+  applyDelta(c,dAff,dAlert,dMood,emo,msg);
+}
+function applyDelta(c,dAff,dAlert,dMood,emo,msg){
   c.affection=clamp(c.affection+dAff);
   c.alert=clamp(c.alert+dAlert);
   c.mood=clamp(c.mood+dMood);
-  if(!msg) msg=pick(p.quip);
-  // 极端情况：胆小猫被吓跑
-  if(c.alert>=98 && c.persona==='胆小'){ runAway(c); return; }
+  if(c.alert>=98 && (c.persona==='胆小'||dAff<0)){ runAway(c); return; }
   $('#cSpeech').querySelector('.react').textContent=emo;
   $('#cSpeechT').textContent=msg + (dAff?`（好感${dAff>0?'+':''}${Math.round(dAff)}）`:'');
   renderCat(c);
@@ -310,10 +393,39 @@ function openCat(c){
     `<span class="tag ${c.breed.rare>=3?'rare':''}">${c.breed.name}</span>`+
     `<span class="tag">${c.persona}</span>`+
     `<span class="tag ${c.breed.rare>=3?'rare':''}">★ ${rareTxt}</span>`;
+  // 喜好线索：列出该性格喜欢的道具
+  const liked=Object.values(ITEMS).filter(it=>it.loves.includes(c.persona)&&!it.rare).map(it=>it.emoji+it.name);
+  const hated=Object.values(ITEMS).filter(it=>it.hates.includes(c.persona)).map(it=>it.name);
+  let hint=`「${c.persona}」似乎偏爱 ${liked.slice(0,3).join('、')||'食物'}`;
+  if(hated.length) hint+=`，讨厌 ${hated.join('、')}`;
+  $('#cHint').textContent='💡 '+hint;
   $('#cSpeech').querySelector('.react').textContent='💭';
   $('#cSpeechT').textContent='它正在打量你…';
   renderCat(c);
   openSheet('#catSheet');
+}
+/* ============ 道具选择器 ============ */
+function openPicker(type){
+  const c=activeCat; if(!c)return;
+  $('#pkTitle').textContent=type==='food'?'🍗 选一样投喂':'🪶 选一个玩具逗它';
+  $('#pkTip').textContent='标 想要 的道具效果翻倍并降警惕；标 讨厌 的会适得其反。';
+  const list=Object.entries(ITEMS).filter(([k,it])=>it.type===type);
+  $('#pkList').innerHTML=list.map(([k,it])=>{
+    const cnt=bag[k]||0;
+    const aff=affinity(it,c.persona);
+    const badge=aff==='love'?'<span class="aff-badge aff-love">想要</span>'
+      :aff==='hate'?'<span class="aff-badge aff-hate">讨厌</span>'
+      :'<span class="aff-badge aff-mid">一般</span>';
+    return `<div class="item-row ${cnt<=0?'disabled':''}" data-key="${k}">
+      <div class="ie">${it.emoji}</div>
+      <div class="info"><div class="iname">${it.name}${badge}</div><div class="idesc">${it.desc}</div></div>
+      <div class="cnt">×${cnt}</div></div>`;
+  }).join('');
+  $('#pkList').querySelectorAll('.item-row').forEach(r=>r.addEventListener('click',()=>{
+    useItem(activeCat, r.dataset.key);
+    closeSheet('#pickerSheet');
+  }));
+  openSheet('#pickerSheet');
 }
 function renderCat(c){
   $('#cAff').style.width=c.affection+'%'; $('#cAffV').textContent=Math.round(c.affection)+'%';
@@ -348,6 +460,12 @@ function renderBook(){
   if(!pets.length){g.innerHTML='<div class="empty" style="grid-column:1/4">还没有领养任何猫咪<br>出门去攻略一只吧～</div>';return;}
   g.innerHTML=pets.map(p=>`<div class="pet"><div class="e">${p.emoji}</div><div class="n">${p.name}</div><div class="p">${p.persona}·${p.breed}</div></div>`).join('');
 }
+function renderBag(){
+  $('#bagGrid').innerHTML=Object.entries(ITEMS).map(([k,it])=>{
+    const cnt=bag[k]||0;
+    return `<div class="slot" style="${cnt<=0?'opacity:.4':''}"><div class="bc">${cnt}</div><div class="be">${it.emoji}</div><div class="bn">${it.name}</div></div>`;
+  }).join('');
+}
 
 /* ============ 弹层控制 ============ */
 function openSheet(s){$(s).classList.add('show');}
@@ -359,13 +477,15 @@ document.querySelectorAll('#catSheet .act').forEach(b=>b.addEventListener('click
   if(!activeCat)return; const act=b.dataset.act;
   if(act==='adopt'){ if(activeCat.affection>=80&&activeCat.alert<=30) adopt(activeCat); return; }
   if(act==='photo'){ takePhoto(activeCat); return; }
-  react(activeCat,act);
+  if(act==='feed'){ openPicker('food'); return; }
+  if(act==='tease'){ openPicker('toy'); return; }
+  if(act==='pet'){ petCat(activeCat); return; }
 }));
 
 /* ============ 底部栏 ============ */
 $('#btnRefresh').addEventListener('click',spawnCats);
 $('#btnLocate').addEventListener('click',()=>{if(myPos)map.setView([myPos.lat,myPos.lng],17);});
-$('#btnBook').addEventListener('click',()=>{renderBook();openSheet('#bookSheet');});
+$('#btnBook').addEventListener('click',()=>{renderBook();renderBag();openSheet('#bookSheet');});
 $('#phClose').addEventListener('click',()=>closeSheet('#photoSheet'));
 
 /* ============ 初始化地图 ============ */
