@@ -345,8 +345,11 @@ async function retryLocate(){
   catch(e){ $('new-loc-city').firstChild.nodeValue='未获取位置'; $('new-loc-sub').textContent='请检查定位权限'; }
 }
 
+let saving = false;
 async function save(){
+  if(saving) return;
   if(!pending){ go('book'); return; }
+  saving = true;
   const t = Date.now();
   let name = ($('new-name').value||'').trim();
   if(!name) name = '无名喵 ' + String(t).slice(-4);
@@ -364,9 +367,19 @@ async function save(){
     encounters: [{t, lat:pending.loc?pending.loc.lat:null, lng:pending.loc?pending.loc.lng:null}],
     note: ''
   };
-  await DB.put(cat); await refreshCats(); refreshAll();
-  pending = null; bookIndex = 0;   // show the newest cat first
-  toast('已收进图鉴 🐾'); await wait(700); go('book');
+  try{
+    // guard against IndexedDB hangs (seen on some iOS Safari versions)
+    await Promise.race([ DB.put(cat), new Promise((_,rej)=>setTimeout(()=>rej(new Error('保存超时')), 6000)) ]);
+  }catch(e){
+    saving = false;
+    toast('保存失败：' + (e && e.message || e));
+    return;
+  }
+  pending = null; bookIndex = 0;          // show the newest cat first
+  try{ await refreshCats(); refreshAll(); }catch(e){ console.warn('refresh after save failed', e); }
+  saving = false;
+  toast('已收进图鉴 🐾');
+  go('book');                              // navigate right away
 }
 
 /* ============================ collection (swipeable card stack) ============================ */
