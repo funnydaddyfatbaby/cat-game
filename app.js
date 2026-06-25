@@ -274,6 +274,8 @@ function buildNewCard(){
     ? `<span class="i" data-ic="image"></span>原图（未去背景）`
     : `<span class="i" data-ic="check"></span>已抠图`;
   paintIcons(badge);
+  const note = $('cut-note');
+  if(note) note.textContent = pending.cutFailed ? ('去背景失败：' + (pending.cutErr || '未知错误')) : '';
 
   // breed chips
   const wrap = $('new-breeds'); wrap.innerHTML = '';
@@ -566,7 +568,8 @@ async function init(){
   updateStatPill();
   onEnter('book'); // default screen: 图鉴
 
-  // PWA service worker
-  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+  // Caching disabled while iterating — kill any old service worker + caches so updates always land
+  if('serviceWorker' in navigator){ navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{}); }
+  if(window.caches){ caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))).catch(()=>{}); }
 }
 init();

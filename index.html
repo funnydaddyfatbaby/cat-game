@@ -191,6 +191,7 @@
     background:rgba(255,255,255,.92); backdrop-filter:saturate(180%) blur(20px); display:flex; flex-direction:column; gap:2px;}
   .new-footer .primary{margin:0; width:100%;}
   .new-footer .ghost{margin:0; width:100%;}
+  .cut-note{margin:10px 20px 0; text-align:center; font-size:12px; color:#c0392b; line-height:1.5; word-break:break-word;}
 
   /* re-encounter / merge */
   .match{margin:16px 20px 0; background:var(--accent-soft); border:1px solid #f1ddc9; border-radius:var(--r); padding:14px; display:flex; gap:12px; align-items:center;}
@@ -358,6 +359,7 @@
         <div class="body">
           <div id="matchBlock" style="display:none"></div>
           <div class="sticker"><img id="new-cut" class="die-cut" alt=""><span class="badge" id="cut-badge"><span class="i" data-ic="check"></span>已抠图</span></div>
+          <div id="cut-note" class="cut-note"></div>
           <div class="field">
             <label>识别品种（点选确认）</label>
             <div class="breeds" id="new-breeds"></div>
@@ -442,6 +444,6 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
