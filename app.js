@@ -90,12 +90,22 @@ function ensureRemoveBg(){
 }
 async function removeBg(blob, onProgress){
   const fn = await ensureRemoveBg();
-  const out = await fn(blob, {
-    publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
-    output: { format: 'image/png' },   // use library default model (verified to work on this path)
+  const base = {
+    output: { format: 'image/png' },
     progress: (key, cur, total)=>{ if(onProgress && total) onProgress(Math.min(1, cur/total)); }
-  });
-  return out; // Blob (transparent PNG)
+  };
+  // models live in the *data* package (not the main dist/). Try jsdelivr data pkg first
+  // (CDN works well in CN), then fall back to imgly's built-in default CDN.
+  const attempts = [
+    { publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.5.5/dist/' },
+    {} // library default resource CDN
+  ];
+  let lastErr;
+  for(const extra of attempts){
+    try{ return await fn(blob, Object.assign({}, base, extra)); }
+    catch(e){ lastErr = e; console.warn('removeBg attempt failed', extra.publicPath||'(default)', e); }
+  }
+  throw lastErr;
 }
 
 /* ============================ breed classification (on-device) ============================ */
