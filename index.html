@@ -4,71 +4,120 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>喵游记 · Cat Go</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
-    --bg:#0f1220; --panel:#1a1f35; --panel2:#232a47; --line:#2e3760;
+    --bg:#0f1220; --panel:#171c30; --panel2:#222a47; --line:#2e3760;
     --txt:#eef1ff; --sub:#9aa3c7; --accent:#ffb454; --accent2:#7c8cff;
-    --good:#5fd38d; --bad:#ff6b8a; --radius:18px;
+    --good:#5fd38d; --bad:#ff6b8a;
+    --sky1:#1a2747; --sky2:#0b0e18; --ground:#11161f; --glow:rgba(255,180,84,.0);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;height:100%;font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;}
-  #app{position:fixed;inset:0;display:flex;flex-direction:column;}
+  html,body{margin:0;height:100%;font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:#000;color:var(--txt);overflow:hidden;}
+  #app{position:fixed;inset:0;}
 
-  /* 顶部状态条 */
-  #topbar{position:absolute;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;gap:10px;
-    padding:10px 14px;background:linear-gradient(180deg,rgba(15,18,32,.92),rgba(15,18,32,0));pointer-events:none;}
-  #topbar .brand{font-weight:800;font-size:18px;letter-spacing:.5px;pointer-events:auto;}
-  #topbar .brand small{color:var(--accent);}
-  #topbar .spacer{flex:1;}
-  .pill{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:999px;
+  /* ============ 场景层 ============ */
+  #stage{position:absolute;inset:0;overflow:hidden;}
+  /* 摄像头实景 */
+  #cam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;background:#000;}
+  body.cam-on #cam{display:block;}
+  /* 插画场景 */
+  #scene{position:absolute;inset:0;
+    background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 62%,var(--ground) 62%,var(--ground) 100%);
+    transition:background 1.2s;}
+  body.cam-on #scene{opacity:0;}
+  /* 远景灯光/星点 */
+  #scene .stars{position:absolute;inset:0;opacity:var(--starOp,0);transition:opacity 1.2s;
+    background-image:radial-gradient(1.5px 1.5px at 20% 18%,#fff,transparent),radial-gradient(1.5px 1.5px at 70% 12%,#fff,transparent),
+    radial-gradient(1px 1px at 45% 26%,#fff,transparent),radial-gradient(1.5px 1.5px at 85% 30%,#cdd,transparent),
+    radial-gradient(1px 1px at 32% 8%,#fff,transparent),radial-gradient(1px 1px at 58% 20%,#fff,transparent);}
+  /* 地平线灯带 */
+  #scene .horizon{position:absolute;left:0;right:0;top:58%;height:8%;
+    background:radial-gradient(120% 100% at 50% 0,rgba(255,200,120,.18),transparent 70%);}
+  /* 路灯 */
+  #scene .lamp{position:absolute;left:14%;top:30%;width:4px;height:32%;background:#283250;}
+  #scene .lamp::before{content:"";position:absolute;top:-14px;left:-9px;width:22px;height:18px;border-radius:11px;
+    background:radial-gradient(circle,#ffdf9e,#b98a32);box-shadow:0 0 26px 10px rgba(255,210,130,var(--lampGlow,.0));}
+  /* 灌木 */
+  #scene .bush{position:absolute;bottom:30%;border-radius:50%;background:#1c3326;filter:blur(.4px);}
+  #scene .b1{left:-4%;width:140px;height:70px;}
+  #scene .b2{right:-3%;width:170px;height:60px;background:#172b20;}
+  #scene .bench{position:absolute;right:20%;bottom:34%;width:78px;height:8px;background:#3a2a1d;border-radius:3px;
+    box-shadow:0 12px 0 -2px #2c2016,-30px 12px 0 -4px #2c2016,28px 12px 0 -4px #2c2016;}
+  /* 地面雾气/暗角 */
+  #stage .vignette{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(120% 80% at 50% 30%,transparent 50%,rgba(0,0,0,.55) 100%);}
+  /* 漂浮微粒（萤火/灰尘） */
+  .motes i{position:absolute;width:3px;height:3px;border-radius:50%;background:rgba(255,220,150,.7);
+    filter:blur(.5px);animation:float 7s ease-in-out infinite;opacity:var(--starOp,.2);}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
+
+  /* ============ 顶栏 ============ */
+  #topbar{position:absolute;top:0;left:0;right:0;z-index:60;display:flex;align-items:center;gap:8px;
+    padding:12px 14px;background:linear-gradient(180deg,rgba(8,10,18,.7),transparent);}
+  .brand{font-weight:800;font-size:18px;letter-spacing:.5px;text-shadow:0 2px 8px #000;}
+  .brand small{color:var(--accent);}
+  .spacer{flex:1;}
+  .pill{background:rgba(20,24,40,.7);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:999px;
     padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px;color:var(--sub);}
   .pill b{color:var(--txt);}
 
-  /* 地图 */
-  #map{flex:1;background:#10131f;z-index:1;}
-  .leaflet-container{background:#10131f;}
-  /* 暗色滤镜让地图更有夜行猫感 */
-  .leaflet-tile{filter:grayscale(.3) brightness(.78) contrast(1.05) hue-rotate(-8deg);}
+  /* ============ 邂逅：大猫 ============ */
+  #encZone{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;display:none;pointer-events:none;}
+  body.encounter #encZone{display:block;}
+  #encShadow{position:absolute;left:50%;top:62%;width:200px;height:34px;margin-left:-100px;
+    background:radial-gradient(50% 50%,rgba(0,0,0,.5),transparent 70%);filter:blur(3px);}
+  #encWrap{position:absolute;left:50%;top:20%;transform:translateX(-50%);width:min(60vw,260px);aspect-ratio:1;
+    animation:catBreath 3.4s ease-in-out infinite;}
+  @keyframes catBreath{0%,100%{transform:translateX(-50%) translateY(0) scale(1)}50%{transform:translateX(-50%) translateY(-6px) scale(1.015)}}
+  #encImg{width:100%;height:100%;object-fit:cover;border-radius:26px;border:3px solid rgba(255,255,255,.85);
+    box-shadow:0 18px 50px rgba(0,0,0,.6);background:#222a47;}
+  #encName{position:absolute;left:50%;bottom:-14px;transform:translateX(-50%);white-space:nowrap;
+    background:rgba(10,12,22,.82);border:1px solid var(--line);border-radius:999px;padding:5px 14px;font-weight:800;font-size:15px;}
+  #encName .stars{color:var(--accent);margin-left:6px;}
 
-  /* 猫 marker */
-  .cat-marker{font-size:30px;line-height:1;filter:drop-shadow(0 3px 4px rgba(0,0,0,.5));
-    animation:bob 2.2s ease-in-out infinite;cursor:pointer;}
-  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-  .me-marker{width:18px;height:18px;border-radius:50%;background:var(--accent2);
-    box-shadow:0 0 0 6px rgba(124,140,255,.25),0 0 0 12px rgba(124,140,255,.12);}
-
-  /* 底部操作栏 */
-  #dock{position:absolute;bottom:0;left:0;right:0;z-index:1000;display:flex;gap:10px;
-    padding:14px 14px calc(14px + env(safe-area-inset-bottom));
-    background:linear-gradient(0deg,rgba(15,18,32,.95),rgba(15,18,32,0));}
-  .dock-btn{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;
-    padding:12px 8px;text-align:center;font-size:13px;color:var(--sub);cursor:pointer;transition:.15s;}
+  /* ============ 底部：附近的猫 ============ */
+  #nearbar{position:absolute;left:0;right:0;bottom:0;z-index:40;padding:14px 12px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(0deg,rgba(8,10,18,.92),transparent);}
+  body.encounter #nearbar{display:none;}
+  #nearbar .nb-title{font-size:13px;color:var(--sub);margin:0 4px 8px;display:flex;justify-content:space-between;}
+  #nearStrip{display:flex;gap:12px;overflow-x:auto;padding:2px 4px 4px;scrollbar-width:none;}
+  #nearStrip::-webkit-scrollbar{display:none;}
+  .ncat{flex:0 0 auto;width:78px;text-align:center;cursor:pointer;transition:.15s;}
+  .ncat:active{transform:scale(.94);}
+  .ncat .ph{width:78px;height:78px;border-radius:20px;object-fit:cover;border:2px solid var(--line);background:#222a47;
+    box-shadow:0 6px 16px rgba(0,0,0,.4);}
+  .ncat.r3 .ph{border-color:var(--accent);box-shadow:0 0 16px rgba(255,180,84,.5);}
+  .ncat.r4 .ph{border-color:#c08bff;box-shadow:0 0 18px rgba(180,120,255,.6);}
+  .ncat .nm{font-size:12px;color:var(--sub);margin-top:5px;}
+  .dockbtns{display:flex;gap:10px;margin-top:12px;}
+  .dock-btn{flex:1;background:rgba(20,24,40,.8);border:1px solid var(--line);border-radius:13px;
+    padding:11px 6px;text-align:center;font-size:13px;color:var(--sub);cursor:pointer;transition:.15s;}
   .dock-btn:active{transform:scale(.96);}
-  .dock-btn .ico{font-size:22px;display:block;margin-bottom:2px;}
+  .dock-btn .ico{font-size:20px;display:block;margin-bottom:2px;}
   .dock-btn.primary{background:linear-gradient(135deg,var(--accent),#ff8e53);color:#1a1206;border:none;font-weight:700;}
+  .dock-btn.on{border-color:var(--good);color:var(--good);}
 
-  /* 通用面板/弹层 */
-  .sheet-mask{position:fixed;inset:0;z-index:2000;background:rgba(5,7,15,.6);backdrop-filter:blur(4px);
+  /* ============ 弹层 ============ */
+  .sheet-mask{position:fixed;inset:0;z-index:2000;background:rgba(5,7,15,.5);backdrop-filter:blur(3px);
     display:none;align-items:flex-end;justify-content:center;}
   .sheet-mask.show{display:flex;}
   .sheet{width:100%;max-width:520px;background:var(--panel);border-radius:22px 22px 0 0;
-    border-top:1px solid var(--line);padding:18px 18px calc(18px + env(safe-area-inset-bottom));
-    transform:translateY(100%);transition:.28s cubic-bezier(.2,.9,.3,1);max-height:88vh;overflow:auto;}
+    border-top:1px solid var(--line);padding:16px 18px calc(18px + env(safe-area-inset-bottom));
+    transform:translateY(100%);transition:.28s cubic-bezier(.2,.9,.3,1);max-height:74vh;overflow:auto;box-shadow:0 -10px 40px rgba(0,0,0,.5);}
   .sheet-mask.show .sheet{transform:translateY(0);}
   .sheet h2{margin:0 0 4px;font-size:20px;}
   .sheet .muted{color:var(--sub);font-size:13px;}
-  .grabber{width:42px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 14px;}
+  .grabber{width:42px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 12px;}
 
-  /* 猫咪详情卡 */
-  .cat-hero{display:flex;gap:14px;align-items:center;margin:6px 0 14px;}
-  .cat-emoji{font-size:54px;line-height:1;width:78px;height:78px;display:flex;align-items:center;justify-content:center;
-    background:var(--panel2);border-radius:18px;flex:0 0 auto;}
+  /* 邂逅面板（半透明，让背景透出） */
+  #catSheet .sheet{background:rgba(23,28,48,.94);backdrop-filter:blur(10px);}
+  .cat-head{display:flex;gap:12px;align-items:center;margin:2px 0 12px;}
+  .cat-thumb{width:60px;height:60px;border-radius:16px;object-fit:cover;flex:0 0 auto;background:#222a47;border:1px solid var(--line);}
   .tag{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;background:var(--panel2);
     border:1px solid var(--line);color:var(--sub);margin:2px 4px 0 0;}
   .tag.rare{color:var(--accent);border-color:#5a4720;background:#2a2210;}
 
-  .stat{margin:10px 0;}
+  .stat{margin:9px 0;}
   .stat .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-bottom:4px;}
   .bar{height:9px;border-radius:9px;background:var(--panel2);overflow:hidden;}
   .bar > i{display:block;height:100%;border-radius:9px;transition:width .4s;}
@@ -76,46 +125,18 @@
   .bar.mood>i{background:linear-gradient(90deg,#7c8cff,#5fd38d);}
   .bar.alert>i{background:linear-gradient(90deg,#5fd38d,#ff6b8a);}
 
-  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+  .hint-chip{margin-top:10px;background:#2a2210;border:1px solid #5a4720;color:var(--accent);
+    border-radius:12px;padding:9px 12px;font-size:13px;}
+  .speech{margin-top:10px;background:var(--panel2);border-radius:14px;padding:11px 13px;font-size:14px;
+    min-height:44px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);}
+  .speech .react{font-size:22px;}
+
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
   .act{padding:13px;border-radius:14px;border:1px solid var(--line);background:var(--panel2);
     text-align:center;font-size:15px;cursor:pointer;transition:.15s;font-weight:600;}
   .act:active{transform:scale(.97);}
   .act.adopt{grid-column:1/3;background:linear-gradient(135deg,var(--good),#3aa971);color:#06150d;border:none;}
   .act.adopt:disabled{filter:grayscale(.8) brightness(.7);cursor:not-allowed;}
-
-  .speech{margin-top:14px;background:var(--panel2);border-radius:14px;padding:12px 14px;font-size:14px;
-    min-height:46px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);}
-  .speech .react{font-size:22px;}
-
-  /* 图鉴 */
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
-  .pet{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center;}
-  .pet .e{font-size:38px;}
-  .pet .n{font-size:13px;font-weight:700;margin-top:4px;}
-  .pet .p{font-size:11px;color:var(--sub);}
-  .empty{color:var(--sub);text-align:center;padding:30px 0;font-size:14px;}
-
-  /* 开场 */
-  #intro{position:fixed;inset:0;z-index:3000;background:radial-gradient(120% 80% at 50% 0%,#202747,#0f1220);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;}
-  #intro .logo{font-size:72px;margin-bottom:6px;}
-  #intro h1{margin:0;font-size:30px;}
-  #intro p{color:var(--sub);max-width:340px;line-height:1.6;}
-  .cta{margin-top:20px;background:linear-gradient(135deg,var(--accent),#ff8e53);color:#1a1206;
-    border:none;border-radius:14px;padding:15px 34px;font-size:17px;font-weight:800;cursor:pointer;}
-  .cta:active{transform:scale(.97);}
-  #intro .hint{font-size:12px;margin-top:14px;}
-
-  /* 拍照 */
-  .photo-card{position:relative;background:#fff;color:#222;border-radius:16px;padding:14px;text-align:center;
-    box-shadow:0 10px 30px rgba(0,0,0,.4);}
-  .photo-card .frame{background:linear-gradient(135deg,#ffe9c7,#ffd1dc);border-radius:12px;padding:26px 0;font-size:90px;}
-  .photo-card .cap{font-weight:800;margin-top:10px;font-size:16px;}
-  .photo-card .sub{color:#888;font-size:12px;}
-
-  /* 喜好线索 */
-  .hint-chip{margin-top:10px;background:#2a2210;border:1px solid #5a4720;color:var(--accent);
-    border-radius:12px;padding:9px 12px;font-size:13px;display:flex;align-items:center;gap:6px;}
 
   /* 道具选择器 */
   .picker-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
@@ -123,74 +144,114 @@
     border-radius:14px;padding:11px 13px;cursor:pointer;transition:.15s;}
   .item-row:active{transform:scale(.98);}
   .item-row.disabled{opacity:.4;pointer-events:none;}
-  .item-row .ie{font-size:30px;width:42px;text-align:center;flex:0 0 auto;}
+  .item-row .ie{font-size:28px;width:40px;text-align:center;flex:0 0 auto;}
   .item-row .info{flex:1;min-width:0;}
   .item-row .iname{font-weight:700;font-size:15px;}
   .item-row .idesc{font-size:12px;color:var(--sub);margin-top:1px;}
   .item-row .cnt{font-size:13px;color:var(--sub);flex:0 0 auto;}
   .aff-badge{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700;margin-left:6px;}
-  .aff-love{background:#1d3a26;color:var(--good);}
-  .aff-hate{background:#3a1d28;color:var(--bad);}
-  .aff-mid{background:var(--panel);color:var(--sub);}
+  .aff-love{background:#1d3a26;color:var(--good);} .aff-hate{background:#3a1d28;color:var(--bad);} .aff-mid{background:var(--panel);color:var(--sub);}
 
-  /* 背包格子（猫窝里） */
+  /* 猫窝 + 背包 */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
+  .pet{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:8px;text-align:center;}
+  .pet img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:#222a47;}
+  .pet .n{font-size:13px;font-weight:700;margin-top:5px;}
+  .pet .p{font-size:11px;color:var(--sub);}
+  .empty{color:var(--sub);text-align:center;padding:26px 0;font-size:14px;}
+  .sec-title{font-size:13px;color:var(--sub);margin:16px 0 0;font-weight:700;}
   .bag{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;}
   .bag .slot{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 4px;text-align:center;position:relative;}
-  .bag .slot .be{font-size:26px;}
-  .bag .slot .bn{font-size:10px;color:var(--sub);margin-top:2px;}
+  .bag .slot .be{font-size:24px;} .bag .slot .bn{font-size:10px;color:var(--sub);margin-top:2px;}
   .bag .slot .bc{position:absolute;top:4px;right:6px;font-size:11px;font-weight:800;color:var(--accent);}
-  .sec-title{font-size:13px;color:var(--sub);margin:16px 0 0;font-weight:700;}
+
+  /* 拍照 */
+  .photo-card{background:#fff;color:#222;border-radius:16px;padding:12px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4);}
+  .photo-card img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;background:#eee;}
+  .photo-card .cap{font-weight:800;margin-top:10px;font-size:16px;}
+  .photo-card .sub{color:#888;font-size:12px;}
+
+  /* 开场 */
+  #intro{position:fixed;inset:0;z-index:3000;background:radial-gradient(120% 80% at 50% 0%,#202747,#0f1220);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;}
+  #intro .logo{font-size:64px;margin-bottom:6px;}
+  #intro h1{margin:0;font-size:30px;}
+  #intro p{color:var(--sub);max-width:340px;line-height:1.6;}
+  .cta{margin-top:20px;background:linear-gradient(135deg,var(--accent),#ff8e53);color:#1a1206;
+    border:none;border-radius:14px;padding:15px 34px;font-size:17px;font-weight:800;cursor:pointer;}
+  .cta:active{transform:scale(.97);}
+  #intro .hint{font-size:12px;margin-top:14px;}
 
   /* toast */
-  #toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%) translateY(20px);z-index:4000;
-    background:#000c;border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:14px;
-    opacity:0;transition:.25s;pointer-events:none;white-space:nowrap;}
+  #toast{position:fixed;bottom:120px;left:50%;transform:translateX(-50%) translateY(20px);z-index:4000;
+    background:#000d;border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:14px;
+    opacity:0;transition:.25s;pointer-events:none;max-width:88vw;text-align:center;}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 </style>
 </head>
 <body>
 <div id="app">
+  <!-- 场景 -->
+  <div id="stage">
+    <video id="cam" autoplay playsinline muted></video>
+    <div id="scene">
+      <div class="stars"></div>
+      <div class="horizon"></div>
+      <div class="lamp"></div>
+      <div class="bush b1"></div><div class="bush b2"></div>
+      <div class="bench"></div>
+    </div>
+    <div class="motes"><i style="left:24%;top:40%"></i><i style="left:60%;top:35%;animation-delay:2s"></i><i style="left:80%;top:50%;animation-delay:4s"></i><i style="left:40%;top:48%;animation-delay:1s"></i></div>
+    <div class="vignette"></div>
+    <!-- 邂逅大猫 -->
+    <div id="encZone">
+      <div id="encShadow"></div>
+      <div id="encWrap"><img id="encImg" alt="cat"/><div id="encName"></div></div>
+    </div>
+  </div>
+
+  <!-- 顶栏 -->
   <div id="topbar">
     <div class="brand">喵<small>游记</small></div>
     <div class="spacer"></div>
-    <div class="pill">🐾 已领养 <b id="petCount">0</b></div>
-    <div class="pill">📍 <b id="locName">定位中…</b></div>
+    <div class="pill">🐾 <b id="petCount">0</b></div>
+    <div class="pill" id="timePill">🌙 夜晚</div>
   </div>
-  <div id="map"></div>
-  <div id="dock">
-    <div class="dock-btn primary" id="btnRefresh"><span class="ico">🔄</span>巡逻刷新</div>
-    <div class="dock-btn" id="btnLocate"><span class="ico">🎯</span>回到我</div>
-    <div class="dock-btn" id="btnBook"><span class="ico">📖</span>我的猫窝</div>
+
+  <!-- 附近的猫 -->
+  <div id="nearbar">
+    <div class="nb-title"><span>🐾 附近出没</span><span id="locTip">点一只猫靠近它</span></div>
+    <div id="nearStrip"></div>
+    <div class="dockbtns">
+      <div class="dock-btn primary" id="btnRefresh"><span class="ico">🔄</span>转转</div>
+      <div class="dock-btn" id="btnCam"><span class="ico">📷</span>实景</div>
+      <div class="dock-btn" id="btnBook"><span class="ico">📖</span>猫窝</div>
+    </div>
   </div>
 </div>
 
 <!-- 开场 -->
 <div id="intro">
-  <div class="logo">🐱</div>
+  <div class="logo">🐾</div>
   <h1>喵游记 · Cat Go</h1>
-  <p>用真实定位探索你身边的世界，街角随机出没着性格各异的野猫。投喂、调戏、拍照，攻略它们的心，把心动的猫咪领养回家。</p>
-  <button class="cta" id="startBtn">开启定位，出门撸猫</button>
-  <div class="pill hint">需要授权位置权限 · 拒绝则用默认城市演示</div>
+  <p>开启实景，让街角的野猫出现在你眼前。读懂它的性格，用对的零食和玩具攻略它的心，把心动的猫咪领养回家。</p>
+  <button class="cta" id="startBtn">进入世界</button>
+  <div class="pill hint">可选开启摄像头实景 · 不开则用氛围场景</div>
 </div>
 
-<!-- 猫咪详情 -->
+<!-- 邂逅互动面板 -->
 <div class="sheet-mask" id="catSheet">
   <div class="sheet">
     <div class="grabber"></div>
-    <div class="cat-hero">
-      <div class="cat-emoji" id="cEmoji">🐱</div>
-      <div>
-        <h2 id="cName">小猫</h2>
-        <div id="cTags"></div>
-      </div>
+    <div class="cat-head">
+      <img class="cat-thumb" id="cThumb" alt="cat"/>
+      <div><h2 id="cName">小猫</h2><div id="cTags"></div></div>
     </div>
     <div class="stat"><div class="lbl"><span>好感度</span><span id="cAffV">0%</span></div><div class="bar affection"><i id="cAff"></i></div></div>
     <div class="stat"><div class="lbl"><span>心情</span><span id="cMoodV">0%</span></div><div class="bar mood"><i id="cMood"></i></div></div>
     <div class="stat"><div class="lbl"><span>警惕值（越低越好领养）</span><span id="cAlertV">0%</span></div><div class="bar alert"><i id="cAlert"></i></div></div>
-
-    <div class="hint-chip" id="cHint">💡 线索加载中…</div>
+    <div class="hint-chip" id="cHint">💡 线索…</div>
     <div class="speech" id="cSpeech"><span class="react">💭</span><span id="cSpeechT">它正在打量你…</span></div>
-
     <div class="actions">
       <div class="act" data-act="feed">🍗 投喂</div>
       <div class="act" data-act="tease">🪶 逗它</div>
@@ -211,7 +272,7 @@
   </div>
 </div>
 
-<!-- 图鉴/猫窝 -->
+<!-- 猫窝 -->
 <div class="sheet-mask" id="bookSheet">
   <div class="sheet">
     <div class="grabber"></div>
@@ -223,12 +284,12 @@
   </div>
 </div>
 
-<!-- 拍照结果 -->
+<!-- 拍照 -->
 <div class="sheet-mask" id="photoSheet">
   <div class="sheet" style="max-width:360px;">
     <div class="grabber"></div>
     <div class="photo-card">
-      <div class="frame" id="phEmoji">🐱</div>
+      <img id="phImg" alt="cat"/>
       <div class="cap" id="phCap">街角的小猫</div>
       <div class="sub" id="phSub">2026 · 拍摄于附近</div>
     </div>
@@ -238,43 +299,31 @@
 
 <div id="toast"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/* ============ 数据定义 ============ */
-const BREEDS = [
-  {key:'orange', name:'橘猫',  emoji:'🐱', rare:1, weight:22},
-  {key:'tabby',  name:'狸花',  emoji:'🐈', rare:1, weight:20},
-  {key:'cow',    name:'奶牛猫',emoji:'🐈‍⬛',rare:1, weight:16},
-  {key:'calico', name:'三花',  emoji:'🐱', rare:2, weight:14},
-  {key:'black',  name:'黑猫',  emoji:'🐈‍⬛',rare:2, weight:12},
-  {key:'white',  name:'奶白猫',emoji:'🐈', rare:2, weight:9},
-  {key:'ragdoll',name:'布偶',  emoji:'😻', rare:3, weight:5},
-  {key:'sphinx', name:'无毛猫',emoji:'🐾', rare:3, weight:2},
-];
+/* ============ 性格 ============ */
 const PERSONAS = {
-  '傲娇':{feed:[-5,15],tease:[-15,5],pet:[-10,12],alert:1.1,quip:['哼，谁要你喂…（偷偷吃）','别以为喂点东西我就会跟你走','……就吃这一口。']},
-  '粘人':{feed:[8,18],tease:[-2,12],pet:[10,20],alert:.7,quip:['喵～再多陪我一会嘛','你身上好香，抱抱？','别走别走！']},
-  '胆小':{feed:[5,12],tease:[-20,-2],pet:[-6,8],alert:1.4,quip:['你…你别过来！','（缩成一团）','唔…有点怕怕的。']},
-  '贪吃':{feed:[14,26],tease:[-4,8],pet:[2,10],alert:.8,quip:['还有吗还有吗！','为了小鱼干我可以！','喵呜——（狼吞虎咽）']},
-  '暴躁':{feed:[-2,12],tease:[-22,-4],pet:[-14,6],alert:1.2,quip:['哈！（炸毛）','再戳一下试试？','离朕远点。']},
-  '慵懒':{feed:[4,12],tease:[-6,4],pet:[6,14],alert:.9,quip:['呼……（眯眼）','困了，别吵。','摸两下还行，多了不行。']},
-  '好奇':{feed:[6,14],tease:[6,18],pet:[4,14],alert:1.0,quip:['这是什么这是什么？','再逗逗我嘛！','你的手好好玩～']},
+  '傲娇':{pet:[-10,12],alert:1.1,quip:['哼，谁要你管…（偷偷蹭）','别以为对我好我就会跟你走','……就这一次。']},
+  '粘人':{pet:[10,20],alert:.7,quip:['喵～再多陪我一会嘛','你身上好香，抱抱？','别走别走！']},
+  '胆小':{pet:[-6,8],alert:1.4,quip:['你…你别过来！','（缩成一团）','唔…有点怕怕的。']},
+  '贪吃':{pet:[2,10],alert:.8,quip:['还有吃的吗！','为了小鱼干我可以！','喵呜——（蹭蹭你）']},
+  '暴躁':{pet:[-14,6],alert:1.2,quip:['哈！（炸毛）','再惹我试试？','离朕远点。']},
+  '慵懒':{pet:[6,14],alert:.9,quip:['呼……（眯眼）','困了，别吵。','摸两下还行。']},
+  '好奇':{pet:[4,14],alert:1.0,quip:['这是什么这是什么？','再陪我玩嘛！','你的手好好玩～']},
 };
 const PERSONA_KEYS = Object.keys(PERSONAS);
-const NAMES = ['布丁','可乐','奥利奥','团子','花卷','麻薯','大橘','咪咪','煤球','雪球','糯米','三斤','土豆','芝麻','虎子','汤圆','拿铁','曲奇'];
+const NAMES = ['布丁','可乐','奥利奥','团子','花卷','麻薯','大橘','咪咪','煤球','雪球','糯米','三斤','土豆','芝麻','虎子','汤圆','拿铁','曲奇','椰奶','年糕'];
+const RARITY = [
+  {name:'普通',star:1,weight:50},{name:'少见',star:2,weight:30},
+  {name:'稀有',star:3,weight:14},{name:'传说',star:4,weight:6},
+];
 
-/* ============ 道具系统 ============
-   aff:好感基础区间  mood:心情  alertDown:降低警惕(正数=降)
-   loves:遇到这些性格效果翻倍且更亲近   hates:遇到这些性格会反效果/炸毛
-*/
+/* ============ 道具 ============ */
 const ITEMS = {
-  // —— 食物（投喂）——
   dryfish:{name:'小鱼干', emoji:'🐟', type:'food', aff:[6,11],  mood:4,  alertDown:6,  loves:['贪吃'],            hates:[],            desc:'最朴实的诚意'},
   can:    {name:'猫罐头', emoji:'🥫', type:'food', aff:[9,15],  mood:5,  alertDown:8,  loves:['贪吃','粘人'],     hates:[],            desc:'肉香四溢，谁都爱'},
   freeze: {name:'冻干',   emoji:'🍤', type:'food', aff:[8,13],  mood:4,  alertDown:12, loves:['傲娇','慵懒'],     hates:[],            desc:'高级货，挑嘴的也买账'},
   catnip: {name:'猫薄荷', emoji:'🌿', type:'food', aff:[4,8],   mood:14, alertDown:18, loves:['胆小','暴躁','慵懒'], hates:[],         desc:'放松神器，大幅降警惕'},
-  grill:  {name:'烤鱼',   emoji:'🍢', type:'food', aff:[14,20], mood:8,  alertDown:10, loves:['傲娇','贪吃','粘人','好奇','胆小','暴躁','慵懒'], hates:[], desc:'稀有大餐，没有猫能拒绝', rare:true},
-  // —— 玩具（逗它）——
+  grill:  {name:'烤鱼',   emoji:'🍢', type:'food', aff:[14,20], mood:8,  alertDown:10, loves:PERSONA_KEYS.slice(), hates:[], desc:'稀有大餐，没有猫能拒绝', rare:true},
   wand:   {name:'逗猫棒', emoji:'🪶', type:'toy',  aff:[6,12],  mood:12, alertDown:2,  loves:['好奇','粘人'],     hates:['暴躁','胆小'], desc:'活泼猫的最爱，胆小/暴躁慎用'},
   laser:  {name:'激光笔', emoji:'🔴', type:'toy',  aff:[8,13],  mood:14, alertDown:0,  loves:['好奇','贪吃'],     hates:['慵懒'],        desc:'刺激，懒猫懒得理你'},
   yarn:   {name:'毛线球', emoji:'🧶', type:'toy',  aff:[5,10],  mood:10, alertDown:4,  loves:['好奇','粘人','慵懒'], hates:[],          desc:'温和安全，老少咸宜'},
@@ -289,111 +338,88 @@ const ri=(a,b)=>Math.floor(rnd(a,b+1));
 const pick=a=>a[ri(0,a.length-1)];
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 function weighted(list){let t=list.reduce((s,x)=>s+x.weight,0),r=Math.random()*t;for(const x of list){if((r-=x.weight)<0)return x;}return list[0];}
-function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),1800);}
+function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),2000);}
 function load(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}
 function save(k,v){localStorage.setItem(k,JSON.stringify(v))}
+function affinity(item,persona){return item.loves.includes(persona)?'love':(item.hates.includes(persona)?'hate':'mid');}
+
+/* ============ 猫咪照片（真实照片 + 离线手绘回退）============ */
+const FUR=[{f:'#e89a55',s:'#c87a36'},{f:'#9a9a9a',s:'#6f6f6f'},{f:'#3c3c44',s:'#23232a'},{f:'#efe2c8',s:'#d6c096'},{f:'#7a5a40',s:'#5a4230'}];
+function fallbackCat(fur){
+  const svg=`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'>
+  <rect width='240' height='240' fill='%23222a47'/>
+  <ellipse cx='120' cy='208' rx='66' ry='12' fill='rgba(0,0,0,.35)'/>
+  <path d='M150 150 q44 -8 34 42 q-6 26 -30 16' fill='${fur.s}'/>
+  <ellipse cx='120' cy='168' rx='58' ry='52' fill='${fur.f}'/>
+  <path d='M82 86 L70 40 L110 70 Z' fill='${fur.f}'/><path d='M158 86 L170 40 L130 70 Z' fill='${fur.f}'/>
+  <path d='M86 80 L80 54 L102 72 Z' fill='%23f5b8c4'/><path d='M154 80 L160 54 L138 72 Z' fill='%23f5b8c4'/>
+  <circle cx='120' cy='112' r='48' fill='${fur.f}'/>
+  <path d='M120 96 q-14 -2 -20 14 M120 96 q14 -2 20 14' stroke='${fur.s}' stroke-width='5' fill='none' stroke-linecap='round'/>
+  <ellipse cx='102' cy='112' rx='9' ry='12' fill='%23222'/><ellipse cx='138' cy='112' rx='9' ry='12' fill='%23222'/>
+  <circle cx='105' cy='108' r='2.6' fill='%23fff'/><circle cx='141' cy='108' r='2.6' fill='%23fff'/>
+  <path d='M114 130 L126 130 L120 137 Z' fill='%23f0889a'/>
+  <path d='M120 137 q-8 8 -18 6 M120 137 q8 8 18 6' stroke='${fur.s}' stroke-width='3' fill='none' stroke-linecap='round'/>
+  <path d='M70 120 L40 116 M72 130 L44 132 M170 120 L200 116 M168 130 L196 132' stroke='rgba(255,255,255,.55)' stroke-width='2'/>
+  </svg>`;
+  return 'data:image/svg+xml;utf8,'+encodeURIComponent(svg);
+}
+function photoURL(id){return `https://cataas.com/cat?width=600&height=600&seed=${id}`;}
+function setCatImg(img,c){
+  img.src=photoURL(c.id);
+  img.onerror=()=>{img.onerror=null;img.src=c.fb;};
+}
 
 /* ============ 状态 ============ */
-let map, meMarker, myPos=null, cats=[], activeCat=null;
+let cats=[], activeCat=null, camStream=null;
 let pets = load('catgo_pets', []);
 let bag = load('catgo_bag', null) || {...START_BAG};
 $('#petCount').textContent = pets.length;
 function saveBag(){save('catgo_bag',bag);}
-function affinity(item,persona){return item.loves.includes(persona)?'love':(item.hates.includes(persona)?'hate':'mid');}
 
 /* ============ 生成野猫 ============ */
-function makeCat(lat,lng){
-  const breed=weighted(BREEDS);
-  const persona=pick(PERSONA_KEYS);
-  return {
-    id:Math.random().toString(36).slice(2),
-    name:pick(NAMES), breed, persona,
-    lat,lng,
-    affection:ri(0,20), mood:ri(35,75), alert:ri(40,90),
-    fed:0, // 当次喂食次数防刷
-  };
+function makeCat(){
+  const persona=pick(PERSONA_KEYS), rarity=weighted(RARITY);
+  const fur=pick(FUR);
+  return {id:Math.random().toString(36).slice(2,9), name:pick(NAMES), persona, rarity, fur, fb:fallbackCat(fur),
+    affection:ri(0,20), mood:ri(35,75), alert:ri(40,90), fed:0, met:false};
 }
 function spawnCats(){
-  cats.forEach(c=>map.removeLayer(c.marker));
-  cats=[];
-  if(!myPos)return;
-  const n=ri(3,6);
-  for(let i=0;i<n;i++){
-    // 在 ~300m 范围内随机
-    const dLat=rnd(-0.0028,0.0028), dLng=rnd(-0.0028,0.0028);
-    const c=makeCat(myPos.lat+dLat, myPos.lng+dLng);
-    const icon=L.divIcon({className:'',html:`<div class="cat-marker">${c.breed.emoji}</div>`,iconSize:[34,34],iconAnchor:[17,17]});
-    c.marker=L.marker([c.lat,c.lng],{icon}).addTo(map);
-    c.marker.on('click',()=>openCat(c));
-    cats.push(c);
-  }
-  // 巡逻补给：基础口粮 + 随机道具，偶尔掉稀有烤鱼
+  const n=ri(3,5);
+  cats=Array.from({length:n},makeCat);
+  renderStrip();
+  // 巡逻补给
   bag.dryfish=(bag.dryfish||0)+2;
   const drop=pick(['can','catnip','wand','yarn','box','laser','freeze']);
   bag[drop]=(bag[drop]||0)+1;
-  let supplyMsg=`补给：🐟小鱼干×2、${ITEMS[drop].emoji}${ITEMS[drop].name}×1`;
-  if(Math.random()<0.15){ bag.grill=(bag.grill||0)+1; supplyMsg+='、🍢烤鱼×1'; }
+  let msg=`这一带有 ${n} 只野猫出没。补给：🐟×2、${ITEMS[drop].emoji}×1`;
+  if(Math.random()<0.15){bag.grill=(bag.grill||0)+1;msg+='、🍢烤鱼×1';}
   saveBag();
-  toast(`出现 ${n} 只野猫！${supplyMsg}`);
+  toast(msg);
+}
+function renderStrip(){
+  const strip=$('#nearStrip');
+  strip.innerHTML='';
+  cats.forEach(c=>{
+    const d=document.createElement('div');
+    d.className='ncat r'+c.rarity.star;
+    d.innerHTML=`<img class="ph" alt="cat"/><div class="nm">${c.met?c.name:'？？？'}</div>`;
+    setCatImg(d.querySelector('img'),c);
+    d.addEventListener('click',()=>openEncounter(c));
+    strip.appendChild(d);
+  });
 }
 
-/* ============ 互动 ============ */
-// 使用道具（投喂/逗它）
-function useItem(c,key){
-  if((bag[key]||0)<=0){toast('这个道具用完了～');return;}
-  bag[key]--; saveBag();
-  const item=ITEMS[key];
-  const aff=affinity(item,c.persona);
-  c.fed=(c.fed||0)+1;
-  const ditch=c.fed>3?.5:1; // 反复同一只边际递减
-  let dAff,dAlert,dMood,emo,msg;
-  if(aff==='love'){
-    dAff=ri(...item.aff)*1.6*ditch; dAlert=-(item.alertDown+8); dMood=item.mood+6;
-    emo='😻'; msg=`正中下心！${c.name}超喜欢${item.name}。`;
-  }else if(aff==='hate'){
-    dAff=-ri(...item.aff)*0.6; dAlert=item.type==='toy'?ri(10,16):ri(2,6); dMood=-ri(6,12);
-    emo=item.type==='toy'?'🙀':'😾';
-    msg=item.type==='toy'?`${c.name}被吓得炸毛了！这玩具不适合它。`:`${c.name}对${item.name}不屑一顾。`;
-  }else{
-    dAff=ri(...item.aff)*ditch; dAlert=-item.alertDown; dMood=item.mood;
-    emo=dAff>8?'😸':'😺'; msg=pick(PERSONAS[c.persona].quip);
-  }
-  applyDelta(c,dAff,dAlert,dMood,emo,msg);
-}
-// 撸一撸（免费动作，警惕高时失败）
-function petCat(c){
-  const p=PERSONAS[c.persona];
-  let dAff,dAlert,dMood,emo,msg;
-  if(c.alert>=60){dAff=-ri(3,8);dAlert=ri(4,10);dMood=-ri(2,6);emo='🙀';msg='它还很警惕，不让你碰。先用食物或纸箱安抚下吧。';}
-  else{dAff=ri(...p.pet);dAlert=-ri(2,8);dMood=ri(4,12);emo=dAff>6?'😽':'😺';msg=pick(p.quip);}
-  applyDelta(c,dAff,dAlert,dMood,emo,msg);
-}
-function applyDelta(c,dAff,dAlert,dMood,emo,msg){
-  c.affection=clamp(c.affection+dAff);
-  c.alert=clamp(c.alert+dAlert);
-  c.mood=clamp(c.mood+dMood);
-  if(c.alert>=98 && (c.persona==='胆小'||dAff<0)){ runAway(c); return; }
-  $('#cSpeech').querySelector('.react').textContent=emo;
-  $('#cSpeechT').textContent=msg + (dAff?`（好感${dAff>0?'+':''}${Math.round(dAff)}）`:'');
-  renderCat(c);
-}
-function runAway(c){
-  toast(`${c.name} 受惊跑掉了…💨`);
-  map.removeLayer(c.marker); cats=cats.filter(x=>x!==c);
-  closeSheet('#catSheet');
-}
-
-/* ============ 渲染详情 ============ */
-function openCat(c){
-  activeCat=c;
-  $('#cEmoji').textContent=c.breed.emoji;
+/* ============ 邂逅 ============ */
+function openEncounter(c){
+  activeCat=c; c.met=true;
+  setCatImg($('#encImg'),c);
+  setCatImg($('#cThumb'),c);
+  const stars='★'.repeat(c.rarity.star);
+  $('#encName').innerHTML=`${c.name}<span class="stars">${stars}</span>`;
   $('#cName').textContent=c.name;
-  const rareTxt=['','普通','少见','稀有'][c.breed.rare];
   $('#cTags').innerHTML=
-    `<span class="tag ${c.breed.rare>=3?'rare':''}">${c.breed.name}</span>`+
     `<span class="tag">${c.persona}</span>`+
-    `<span class="tag ${c.breed.rare>=3?'rare':''}">★ ${rareTxt}</span>`;
-  // 喜好线索：列出该性格喜欢的道具
+    `<span class="tag ${c.rarity.star>=3?'rare':''}">${stars} ${c.rarity.name}</span>`;
   const liked=Object.values(ITEMS).filter(it=>it.loves.includes(c.persona)&&!it.rare).map(it=>it.emoji+it.name);
   const hated=Object.values(ITEMS).filter(it=>it.hates.includes(c.persona)).map(it=>it.name);
   let hint=`「${c.persona}」似乎偏爱 ${liked.slice(0,3).join('、')||'食物'}`;
@@ -402,30 +428,12 @@ function openCat(c){
   $('#cSpeech').querySelector('.react').textContent='💭';
   $('#cSpeechT').textContent='它正在打量你…';
   renderCat(c);
+  document.body.classList.add('encounter');
   openSheet('#catSheet');
 }
-/* ============ 道具选择器 ============ */
-function openPicker(type){
-  const c=activeCat; if(!c)return;
-  $('#pkTitle').textContent=type==='food'?'🍗 选一样投喂':'🪶 选一个玩具逗它';
-  $('#pkTip').textContent='标 想要 的道具效果翻倍并降警惕；标 讨厌 的会适得其反。';
-  const list=Object.entries(ITEMS).filter(([k,it])=>it.type===type);
-  $('#pkList').innerHTML=list.map(([k,it])=>{
-    const cnt=bag[k]||0;
-    const aff=affinity(it,c.persona);
-    const badge=aff==='love'?'<span class="aff-badge aff-love">想要</span>'
-      :aff==='hate'?'<span class="aff-badge aff-hate">讨厌</span>'
-      :'<span class="aff-badge aff-mid">一般</span>';
-    return `<div class="item-row ${cnt<=0?'disabled':''}" data-key="${k}">
-      <div class="ie">${it.emoji}</div>
-      <div class="info"><div class="iname">${it.name}${badge}</div><div class="idesc">${it.desc}</div></div>
-      <div class="cnt">×${cnt}</div></div>`;
-  }).join('');
-  $('#pkList').querySelectorAll('.item-row').forEach(r=>r.addEventListener('click',()=>{
-    useItem(activeCat, r.dataset.key);
-    closeSheet('#pickerSheet');
-  }));
-  openSheet('#pickerSheet');
+function exitEncounter(){
+  document.body.classList.remove('encounter');
+  activeCat=null;
 }
 function renderCat(c){
   $('#cAff').style.width=c.affection+'%'; $('#cAffV').textContent=Math.round(c.affection)+'%';
@@ -436,43 +444,90 @@ function renderCat(c){
   $('#adoptBtn').textContent=can?'🏠 领养它回家！':'🏠 领养（好感≥80 且 警惕≤30）';
 }
 
-/* ============ 拍照 ============ */
-function takePhoto(c){
-  $('#phEmoji').textContent=c.breed.emoji;
-  $('#phCap').textContent=`${c.name} · ${c.persona}的${c.breed.name}`;
-  $('#phSub').textContent=`2026 · 拍摄于 ${$('#locName').textContent}`;
-  openSheet('#photoSheet');
+/* ============ 互动 ============ */
+function useItem(c,key){
+  if((bag[key]||0)<=0){toast('这个道具用完了～');return;}
+  bag[key]--; saveBag();
+  const item=ITEMS[key], aff=affinity(item,c.persona);
+  c.fed=(c.fed||0)+1; const ditch=c.fed>3?.5:1;
+  let dAff,dAlert,dMood,emo,msg;
+  if(aff==='love'){dAff=ri(...item.aff)*1.6*ditch;dAlert=-(item.alertDown+8);dMood=item.mood+6;emo='😻';msg=`正中下怀！${c.name}超喜欢${item.name}。`;}
+  else if(aff==='hate'){dAff=-ri(...item.aff)*0.6;dAlert=item.type==='toy'?ri(10,16):ri(2,6);dMood=-ri(6,12);emo=item.type==='toy'?'🙀':'😾';msg=item.type==='toy'?`${c.name}被吓得炸毛了！这玩具不适合它。`:`${c.name}对${item.name}不屑一顾。`;}
+  else{dAff=ri(...item.aff)*ditch;dAlert=-item.alertDown;dMood=item.mood;emo=dAff>8?'😸':'😺';msg=pick(PERSONAS[c.persona].quip);}
+  applyDelta(c,dAff,dAlert,dMood,emo,msg);
+}
+function petCat(c){
+  const p=PERSONAS[c.persona];
+  let dAff,dAlert,dMood,emo,msg;
+  if(c.alert>=60){dAff=-ri(3,8);dAlert=ri(4,10);dMood=-ri(2,6);emo='🙀';msg='它还很警惕，不让你碰。先用食物或纸箱安抚下吧。';}
+  else{dAff=ri(...p.pet);dAlert=-ri(2,8);dMood=ri(4,12);emo=dAff>6?'😽':'😺';msg=pick(p.quip);}
+  applyDelta(c,dAff,dAlert,dMood,emo,msg);
+}
+function applyDelta(c,dAff,dAlert,dMood,emo,msg){
+  c.affection=clamp(c.affection+dAff); c.alert=clamp(c.alert+dAlert); c.mood=clamp(c.mood+dMood);
+  if(c.alert>=98 && (c.persona==='胆小'||dAff<0)){ runAway(c); return; }
+  $('#cSpeech').querySelector('.react').textContent=emo;
+  $('#cSpeechT').textContent=msg + (dAff?`（好感${dAff>0?'+':''}${Math.round(dAff)}）`:'');
+  renderCat(c);
+}
+function runAway(c){
+  toast(`${c.name} 受惊跑掉了…💨`);
+  cats=cats.filter(x=>x!==c); renderStrip();
+  closeSheet('#catSheet'); exitEncounter();
 }
 
-/* ============ 领养 ============ */
+/* ============ 道具选择器 ============ */
+function openPicker(type){
+  const c=activeCat; if(!c)return;
+  $('#pkTitle').textContent=type==='food'?'🍗 选一样投喂':'🪶 选一个玩具逗它';
+  $('#pkTip').textContent='标 想要 的道具效果翻倍并降警惕；标 讨厌 的会适得其反。';
+  const list=Object.entries(ITEMS).filter(([k,it])=>it.type===type);
+  $('#pkList').innerHTML=list.map(([k,it])=>{
+    const cnt=bag[k]||0, aff=affinity(it,c.persona);
+    const badge=aff==='love'?'<span class="aff-badge aff-love">想要</span>':aff==='hate'?'<span class="aff-badge aff-hate">讨厌</span>':'<span class="aff-badge aff-mid">一般</span>';
+    return `<div class="item-row ${cnt<=0?'disabled':''}" data-key="${k}"><div class="ie">${it.emoji}</div>
+      <div class="info"><div class="iname">${it.name}${badge}</div><div class="idesc">${it.desc}</div></div><div class="cnt">×${cnt}</div></div>`;
+  }).join('');
+  $('#pkList').querySelectorAll('.item-row').forEach(r=>r.addEventListener('click',()=>{useItem(activeCat,r.dataset.key);closeSheet('#pickerSheet');}));
+  openSheet('#pickerSheet');
+}
+
+/* ============ 拍照 / 领养 ============ */
+function takePhoto(c){
+  setCatImg($('#phImg'),c);
+  $('#phCap').textContent=`${c.name} · ${c.persona}`;
+  $('#phSub').textContent=`2026 · ${'★'.repeat(c.rarity.star)} ${c.rarity.name}`;
+  openSheet('#photoSheet');
+}
 function adopt(c){
-  const pet={id:c.id,name:c.name,emoji:c.breed.emoji,breed:c.breed.name,persona:c.persona,rare:c.breed.rare,date:'2026-06-25'};
-  pets.unshift(pet); save('catgo_pets',pets);
+  pets.unshift({id:c.id,name:c.name,persona:c.persona,rarity:c.rarity,fb:c.fb}); save('catgo_pets',pets);
   $('#petCount').textContent=pets.length;
-  map.removeLayer(c.marker); cats=cats.filter(x=>x!==c);
-  closeSheet('#catSheet');
+  cats=cats.filter(x=>x!==c); renderStrip();
+  closeSheet('#catSheet'); exitEncounter();
   toast(`🎉 你领养了 ${c.name}！欢迎回家～`);
 }
 
 /* ============ 猫窝 ============ */
 function renderBook(){
   const g=$('#petGrid');
-  if(!pets.length){g.innerHTML='<div class="empty" style="grid-column:1/4">还没有领养任何猫咪<br>出门去攻略一只吧～</div>';return;}
-  g.innerHTML=pets.map(p=>`<div class="pet"><div class="e">${p.emoji}</div><div class="n">${p.name}</div><div class="p">${p.persona}·${p.breed}</div></div>`).join('');
+  if(!pets.length){g.innerHTML='<div class="empty" style="grid-column:1/4">还没有领养任何猫咪<br>去攻略一只吧～</div>';}
+  else g.innerHTML=pets.map((p,i)=>`<div class="pet"><img id="pet${i}" alt="cat"/><div class="n">${p.name}</div><div class="p">${'★'.repeat(p.rarity.star)}·${p.persona}</div></div>`).join('');
+  pets.forEach((p,i)=>{const im=document.getElementById('pet'+i);if(im)setCatImg(im,p);});
 }
 function renderBag(){
-  $('#bagGrid').innerHTML=Object.entries(ITEMS).map(([k,it])=>{
-    const cnt=bag[k]||0;
-    return `<div class="slot" style="${cnt<=0?'opacity:.4':''}"><div class="bc">${cnt}</div><div class="be">${it.emoji}</div><div class="bn">${it.name}</div></div>`;
-  }).join('');
+  $('#bagGrid').innerHTML=Object.entries(ITEMS).map(([k,it])=>{const cnt=bag[k]||0;
+    return `<div class="slot" style="${cnt<=0?'opacity:.4':''}"><div class="bc">${cnt}</div><div class="be">${it.emoji}</div><div class="bn">${it.name}</div></div>`;}).join('');
 }
 
-/* ============ 弹层控制 ============ */
+/* ============ 弹层 ============ */
 function openSheet(s){$(s).classList.add('show');}
 function closeSheet(s){$(s).classList.remove('show');}
-document.querySelectorAll('.sheet-mask').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');}));
+document.querySelectorAll('.sheet-mask').forEach(m=>m.addEventListener('click',e=>{
+  if(e.target!==m)return; m.classList.remove('show');
+  if(m.id==='catSheet') exitEncounter();
+}));
 
-/* ============ 详情按钮 ============ */
+/* ============ 按钮 ============ */
 document.querySelectorAll('#catSheet .act').forEach(b=>b.addEventListener('click',()=>{
   if(!activeCat)return; const act=b.dataset.act;
   if(act==='adopt'){ if(activeCat.affection>=80&&activeCat.alert<=30) adopt(activeCat); return; }
@@ -481,35 +536,42 @@ document.querySelectorAll('#catSheet .act').forEach(b=>b.addEventListener('click
   if(act==='tease'){ openPicker('toy'); return; }
   if(act==='pet'){ petCat(activeCat); return; }
 }));
-
-/* ============ 底部栏 ============ */
 $('#btnRefresh').addEventListener('click',spawnCats);
-$('#btnLocate').addEventListener('click',()=>{if(myPos)map.setView([myPos.lat,myPos.lng],17);});
 $('#btnBook').addEventListener('click',()=>{renderBook();renderBag();openSheet('#bookSheet');});
 $('#phClose').addEventListener('click',()=>closeSheet('#photoSheet'));
+$('#btnCam').addEventListener('click',toggleCam);
 
-/* ============ 初始化地图 ============ */
-function initMap(lat,lng,label){
-  myPos={lat,lng};
-  $('#locName').textContent=label||'当前位置';
-  map=L.map('map',{zoomControl:false,attributionControl:false}).setView([lat,lng],17);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-  const meIcon=L.divIcon({className:'',html:'<div class="me-marker"></div>',iconSize:[18,18],iconAnchor:[9,9]});
-  meMarker=L.marker([lat,lng],{icon:meIcon}).addTo(map);
-  spawnCats();
+/* ============ 摄像头实景 ============ */
+async function toggleCam(){
+  const btn=$('#btnCam');
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; document.body.classList.remove('cam-on'); btn.classList.remove('on'); return; }
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    $('#cam').srcObject=camStream; document.body.classList.add('cam-on'); btn.classList.add('on');
+    toast('已开启实景模式 📷');
+  }catch(e){ toast('无法使用摄像头，继续用氛围场景'); }
+}
+
+/* ============ 时间天色 ============ */
+function applyDaylight(){
+  const h=new Date().getHours();
+  const root=document.documentElement.style; let label,sky1,sky2,ground,starOp,lampGlow;
+  if(h>=6&&h<10){label='🌅 清晨';sky1='#3a4a78';sky2='#cf9a6e';ground='#3a3026';starOp='0';lampGlow='.0';}
+  else if(h>=10&&h<17){label='☀️ 白天';sky1='#5b86c4';sky2='#bcd0e8';ground='#5a5040';starOp='0';lampGlow='.0';}
+  else if(h>=17&&h<19){label='🌇 黄昏';sky1='#4a3a6e';sky2='#e08850';ground='#3a2c22';starOp='.2';lampGlow='.5';}
+  else{label='🌙 夜晚';sky1='#1a2747';sky2='#0b0e18';ground='#0e1219';starOp='.9';lampGlow='.85';}
+  root.setProperty('--sky1',sky1);root.setProperty('--sky2',sky2);root.setProperty('--ground',ground);
+  root.setProperty('--starOp',starOp);root.setProperty('--lampGlow',lampGlow);
+  $('#timePill').textContent=label;
 }
 
 /* ============ 开始 ============ */
 $('#startBtn').addEventListener('click',()=>{
-  $('#startBtn').textContent='定位中…';
-  const fallback=()=>{ initMap(31.2304,121.4737,'上海(演示)'); $('#intro').style.display='none'; };
-  if(!navigator.geolocation){fallback();return;}
-  navigator.geolocation.getCurrentPosition(
-    pos=>{ initMap(pos.coords.latitude,pos.coords.longitude,'我的位置'); $('#intro').style.display='none'; },
-    err=>{ toast('未获得定位权限，使用演示位置'); fallback(); },
-    {enableHighAccuracy:true,timeout:8000}
-  );
+  applyDaylight();
+  spawnCats();
+  $('#intro').style.display='none';
 });
+applyDaylight();
 </script>
 </body>
 </html>
