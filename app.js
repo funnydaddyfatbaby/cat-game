@@ -105,7 +105,7 @@ function ensureModel(){
   _modelP = (async()=>{
     if(!window.tf) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
     if(!window.mobilenet) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js');
-    return window.mobilenet.load({version:1, alpha:0.5}); // small + fast, enough for ImageNet cat classes
+    return window.mobilenet.load({version:2, alpha:1.0}); // most accurate general model
   })();
   return _modelP;
 }
@@ -199,16 +199,22 @@ async function startPipeline(blob){
   go('proc');
   const stage = $('cutstage'); stage.classList.remove('done');
   const outImg = $('cut-out-img'); outImg.classList.remove('on');
-  $('cut-orig-img').src = objURL(blob);
-  setProc('正在识别猫咪轮廓…','端上模型分割，图片不上传'); setBar(10);
+  setProc('正在识别猫咪轮廓…','端上模型分割，图片不上传'); setBar(8);
+
+  // downscale first — full-res phone photos make on-device segmentation OOM/fail on iOS Safari
+  const work = await downscaleBlob(blob, 1024);
+  $('cut-orig-img').src = objURL(work);
 
   const geoP = getLocation().then(loc=>reverseGeocode(loc.lat,loc.lng).then(pl=>({loc,pl}))).catch(()=>null);
-  // classify the original photo in parallel with background removal (independent work)
-  const classifyP = blobToImg(blob).then(img=>classify(img)).catch(e=>{ console.warn('classify failed', e); return [{cn:'中华田园猫', prob:0.5, guess:true}]; });
+  // classify in parallel with background removal (independent work)
+  const classifyP = blobToImg(work).then(img=>classify(img)).catch(e=>{ console.warn('classify failed', e); return [{cn:'中华田园猫', prob:0.5, guess:true}]; });
 
   let cutBlob;
-  try{ cutBlob = await removeBg(blob, p=>setBar(10 + p*68)); }
-  catch(e){ console.warn('removeBg failed', e); cutBlob = blob; pending.cutFailed = true; }
+  try{ cutBlob = await removeBg(work, p=>setBar(8 + p*70)); }
+  catch(e){
+    console.warn('removeBg failed', e);
+    cutBlob = work; pending.cutFailed = true; pending.cutErr = (e && e.message || String(e)).slice(0,90);
+  }
   pending.cutBlob = cutBlob;
 
   outImg.src = objURL(cutBlob); await imgLoaded(outImg);
@@ -232,6 +238,21 @@ async function startPipeline(blob){
   buildNewCard();
   await wait(200);
   go('new');
+  if(pending.cutFailed) toast('去背景失败，已用原图 · ' + (pending.cutErr||''));
+}
+
+// scale the longest side down to maxDim (keeps aspect); returns original if already small
+async function downscaleBlob(blob, maxDim){
+  try{
+    const img = await blobToImg(blob);
+    const long = Math.max(img.naturalWidth, img.naturalHeight) || maxDim;
+    const scale = Math.min(1, maxDim/long);
+    if(scale >= 1) return blob;
+    const w = Math.round(img.naturalWidth*scale), h = Math.round(img.naturalHeight*scale);
+    const c = document.createElement('canvas'); c.width=w; c.height=h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    return await new Promise(r=>c.toBlob(b=>r(b||blob), 'image/jpeg', 0.9));
+  }catch(e){ return blob; }
 }
 
 async function makeThumb(blob){
@@ -248,6 +269,11 @@ async function makeThumb(blob){
 function buildNewCard(){
   $('new-cut').src = objURL(pending.cutBlob);
   $('new-name').value = '';
+  const badge = $('cut-badge');
+  if(badge) badge.innerHTML = pending.cutFailed
+    ? `<span class="i" data-ic="image"></span>原图（未去背景）`
+    : `<span class="i" data-ic="check"></span>已抠图`;
+  paintIcons(badge);
 
   // breed chips
   const wrap = $('new-breeds'); wrap.innerHTML = '';
