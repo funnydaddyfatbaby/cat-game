@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - claude/vigilant-goodall-jjmhnu
+      - claude/lucid-meitner-i9tyrz
       - main
   workflow_dispatch:
 
