@@ -79,17 +79,20 @@ let CATS = [];               // in-memory cache of all cats
 async function refreshCats(){ CATS = await DB.all(); CATS.sort((a,b)=>b.lastSeen-a.lastSeen); }
 
 /* ============================ background removal (on-device) ============================ */
-let _removeBg;
-async function ensureRemoveBg(){
-  if(_removeBg) return _removeBg;
-  const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm');
-  _removeBg = mod.removeBackground || mod.default;
-  return _removeBg;
+let _removeBgP;
+function ensureRemoveBg(){
+  if(_removeBgP) return _removeBgP;
+  _removeBgP = (async()=>{
+    const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm');
+    return mod.removeBackground || mod.default;
+  })();
+  return _removeBgP;
 }
 async function removeBg(blob, onProgress){
   const fn = await ensureRemoveBg();
   const out = await fn(blob, {
     publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
+    model: 'isnet_quint8',           // smallest/fastest model — much better on mobile
     output: { format: 'image/png' },
     progress: (key, cur, total)=>{ if(onProgress && total) onProgress(Math.min(1, cur/total)); }
   });
@@ -97,14 +100,18 @@ async function removeBg(blob, onProgress){
 }
 
 /* ============================ breed classification (on-device) ============================ */
-let _model;
-async function ensureModel(){
-  if(_model) return _model;
-  if(!window.tf) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
-  if(!window.mobilenet) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js');
-  _model = await window.mobilenet.load({version:2, alpha:1.0});
-  return _model;
+let _modelP;
+function ensureModel(){
+  if(_modelP) return _modelP;
+  _modelP = (async()=>{
+    if(!window.tf) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+    if(!window.mobilenet) await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js');
+    return window.mobilenet.load({version:1, alpha:0.5}); // small + fast, enough for ImageNet cat classes
+  })();
+  return _modelP;
 }
+// warm up both heavy models while the user is still aiming the camera
+function prewarmModels(){ ensureRemoveBg().catch(()=>{}); ensureModel().catch(()=>{}); }
 // ImageNet cat classes -> friendly CN names
 const CAT_MAP = [
   ['tabby','狸花猫 / 虎斑'], ['tiger cat','虎斑猫'], ['egyptian cat','田园猫'],
@@ -153,9 +160,12 @@ async function reverseGeocode(lat,lng){
 let camStream = null;
 async function startCamera(){
   const v = $('cam-video'), hint = $('cam-hint');
+  hint.textContent = '正在打开摄像头…';
   try{
     camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ideal:'environment'} }, audio:false });
-    v.srcObject = camStream; v.style.display='';
+    v.srcObject = camStream;
+    v.setAttribute('playsinline',''); v.muted = true; v.style.display='';
+    try{ await v.play(); }catch(e){}   // iOS Safari needs explicit play(), else frames are black
     hint.textContent = '把猫咪放进框里 · 点下方快门';
   }catch(e){
     v.style.display='none';
@@ -163,16 +173,21 @@ async function startCamera(){
   }
 }
 function stopCamera(){ if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; } }
-function capture(){
+function drawAndShoot(v){
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  c.toBlob(b=>{ if(b) startPipeline(b); }, 'image/jpeg', 0.92);
+}
+async function capture(){
   const v = $('cam-video');
-  if(camStream && v.videoWidth){
-    const c = document.createElement('canvas');
-    c.width = v.videoWidth; c.height = v.videoHeight;
-    c.getContext('2d').drawImage(v,0,0);
-    c.toBlob(b=>{ if(b) startPipeline(b); }, 'image/jpeg', 0.92);
-  }else{
-    $('cam-file').click(); // fall back to picking a photo
+  if(!camStream){ $('cam-file').click(); return; }
+  if(v.readyState < 2 || !v.videoWidth){            // wait for real frames (avoids black captures)
+    try{ await v.play(); }catch(e){}
+    for(let i=0;i<12 && (v.readyState<2 || !v.videoWidth); i++){ await wait(120); }
   }
+  if(v.videoWidth){ drawAndShoot(v); }
+  else { toast('相机还没准备好，请稍候再按快门'); }
 }
 
 /* ============================ processing pipeline ============================ */
@@ -189,6 +204,8 @@ async function startPipeline(blob){
   setProc('正在识别猫咪轮廓…','端上模型分割，图片不上传'); setBar(10);
 
   const geoP = getLocation().then(loc=>reverseGeocode(loc.lat,loc.lng).then(pl=>({loc,pl}))).catch(()=>null);
+  // classify the original photo in parallel with background removal (independent work)
+  const classifyP = blobToImg(blob).then(img=>classify(img)).catch(e=>{ console.warn('classify failed', e); return [{cn:'中华田园猫', prob:0.5, guess:true}]; });
 
   let cutBlob;
   try{ cutBlob = await removeBg(blob, p=>setBar(10 + p*68)); }
@@ -202,9 +219,8 @@ async function startPipeline(blob){
   stage.classList.add('done'); outImg.classList.add('on');
   await wait(950);
 
-  setProc('识别品种…','离线比对常见猫种特征'); setBar(90);
-  try{ const oi = await blobToImg(blob); pending.cands = await classify(oi); }
-  catch(e){ console.warn('classify failed', e); pending.cands = [{cn:'中华田园猫', prob:0.5, guess:true}]; }
+  setProc('识别品种…','离线比对常见猫种特征'); setBar(92);
+  pending.cands = await classifyP;
   pending.breed = pending.cands[0].cn;
   setBar(96);
 
@@ -467,7 +483,7 @@ function go(id){
 }
 function onEnter(id){
   if(id==='map'){ initMap(); setTimeout(()=>{ if(map){ map.invalidateSize(); renderMap(); } }, 60); }
-  else if(id==='cam'){ startCamera(); }
+  else if(id==='cam'){ startCamera(); prewarmModels(); }
   else if(id==='book'){ renderCollection(); }
   else if(id==='stats'){ renderStats(); }
 }
