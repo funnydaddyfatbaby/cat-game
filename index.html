@@ -2,8 +2,15 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>喵迹 Catlas · 原型线框图</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>喵迹 Catlas</title>
+<meta name="theme-color" content="#ffffff" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <style>
   :root{
     --bg:#ffffff; --bg2:#f6f6f4; --card:#ffffff; --line:#ececea;
@@ -19,14 +26,11 @@
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",Roboto,sans-serif;
     -webkit-font-smoothing:antialiased;}
 
-  /* icon system: every icon is inline SVG injected into [data-ic] */
   .i{display:inline-flex; align-items:center; justify-content:center; line-height:0;}
   .i svg{width:1em; height:1em; display:block;}
-  .i.emoji{line-height:1;} /* cat-photo emoji placeholders need normal line-height */
+  .i.emoji{line-height:1;}
 
-  /* ===== desktop staging ===== */
-  .stage{min-height:100vh; display:flex; flex-direction:column; align-items:center;
-    padding:30px 12px 48px; gap:18px;}
+  .stage{min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:30px 12px 48px; gap:18px;}
   .stage-head{text-align:center; color:var(--ink2); max-width:430px;}
   .stage-head h1{color:var(--ink); font-size:21px; margin:0 0 6px; letter-spacing:-.02em; font-weight:600;}
   .stage-head p{font-size:13px; line-height:1.7; margin:6px 0 0;}
@@ -42,192 +46,183 @@
   @media (max-width:430px){
     html,body{background:#fff;}
     .stage{padding:0;} .stage-head{display:none;}
-    .phone{width:100vw; height:100vh; border-radius:0; border:0; box-shadow:none;}
+    .phone{width:100vw; height:100vh; height:100dvh; border-radius:0; border:0; box-shadow:none;}
     .notch{display:none;}
   }
 
-  /* ===== screen system ===== */
   .screens{flex:1; position:relative; overflow:hidden;}
-  .screen{position:absolute; inset:0; display:none; flex-direction:column;
-    overflow:hidden; background:var(--bg); animation:fade .28s ease;}
+  .screen{position:absolute; inset:0; display:none; flex-direction:column; overflow:hidden; background:var(--bg); animation:fade .28s ease;}
   .screen.active{display:flex;}
   @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
   .body{flex:1; overflow-y:auto; padding:0 0 96px;}
   .body::-webkit-scrollbar{display:none;}
 
-  /* top bar */
-  .topbar{padding:58px 20px 14px; display:flex; align-items:center; gap:12px;
-    position:sticky; top:0; background:rgba(255,255,255,.82); backdrop-filter:saturate(180%) blur(20px);
-    z-index:20; border-bottom:1px solid transparent;}
+  .topbar{padding:58px 20px 14px; display:flex; align-items:center; gap:12px; position:sticky; top:0;
+    background:rgba(255,255,255,.82); backdrop-filter:saturate(180%) blur(20px); z-index:20; border-bottom:1px solid transparent;}
   .topbar.bordered{border-color:var(--line);}
   .topbar h2{font-size:22px; margin:0; flex:1; letter-spacing:-.03em; font-weight:600;}
   .topbar .sub{font-size:13px; color:var(--ink2); font-weight:400; letter-spacing:0;}
-  .iconbtn{width:38px; height:38px; border-radius:50%; background:var(--bg2);
-    border:1px solid var(--line); color:var(--ink); display:flex; align-items:center;
-    justify-content:center; cursor:pointer; transition:.15s; font-size:18px;}
+  .iconbtn{width:38px; height:38px; border-radius:50%; background:var(--bg2); border:1px solid var(--line);
+    color:var(--ink); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s; font-size:18px;}
   .iconbtn:active{transform:scale(.92);}
   .iconbtn.back{font-size:22px;}
 
-  /* bottom tab bar */
-  .tabbar{position:absolute; left:0; right:0; bottom:0; height:82px;
-    background:rgba(255,255,255,.88); backdrop-filter:saturate(180%) blur(20px);
-    border-top:1px solid var(--line); display:flex; align-items:flex-start;
-    padding-top:10px; z-index:40;}
-  .tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
-    color:var(--ink3); font-size:10px; cursor:pointer; padding-top:6px; font-weight:500;}
+  .tabbar{position:absolute; left:0; right:0; bottom:0; height:82px; background:rgba(255,255,255,.88);
+    backdrop-filter:saturate(180%) blur(20px); border-top:1px solid var(--line); display:flex; align-items:flex-start; padding-top:10px; z-index:40;}
+  .tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--ink3); font-size:10px; cursor:pointer; padding-top:6px; font-weight:500;}
   .tab .ic{font-size:22px;}
   .tab.on{color:var(--ink);}
   .shutter-tab{flex:1; display:flex; justify-content:center;}
-  .shutter{width:58px; height:58px; border-radius:50%; margin-top:-14px; color:#fff;
-    background:var(--ink); border:4px solid var(--bg); box-shadow:0 6px 16px rgba(0,0,0,.22);
-    display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; transition:.15s;}
+  .shutter{width:58px; height:58px; border-radius:50%; margin-top:-14px; color:#fff; background:var(--ink);
+    border:4px solid var(--bg); box-shadow:0 6px 16px rgba(0,0,0,.22); display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; transition:.15s;}
   .shutter:active{transform:scale(.92);}
 
-  /* ===== MAP ===== */
+  /* MAP */
   .map{position:relative; flex:1; overflow:hidden; background:#eef0ec;}
-  .map .land{position:absolute; inset:0; background:
-      radial-gradient(circle at 78% 22%, #dbe7d4 0 90px, transparent 92px),
-      radial-gradient(circle at 18% 72%, #cfe6ea 0 120px, transparent 122px), #eef0ec;}
-  .road{position:absolute; background:#fff; border-radius:8px; box-shadow:0 0 0 1px #e3e3df;}
-  .road.minor{background:#f5f5f2;}
-  .stat-pill{position:absolute; top:64px; left:50%; transform:translateX(-50%);
-    background:#fff; border:1px solid var(--line); border-radius:999px; padding:10px 18px;
-    font-size:13px; color:var(--ink2); display:flex; gap:16px; z-index:10; white-space:nowrap; box-shadow:var(--shadow);}
+  .leaflet-host{position:absolute; inset:0; z-index:0;}
+  .stat-pill{position:absolute; top:64px; left:50%; transform:translateX(-50%); background:#fff; border:1px solid var(--line);
+    border-radius:999px; padding:10px 18px; font-size:13px; color:var(--ink2); display:flex; gap:16px; z-index:10; white-space:nowrap; box-shadow:var(--shadow);}
   .stat-pill b{color:var(--ink); font-size:14px; font-weight:600;}
-  .pin{position:absolute; transform:translate(-50%,-50%); cursor:pointer; z-index:5;
-    width:50px; height:50px; border-radius:50%; border:3px solid #fff; background:#fff;
-    display:flex; align-items:center; justify-content:center; color:var(--ink);
-    box-shadow:0 4px 14px rgba(0,0,0,.16); transition:.15s;}
-  .pin .i{font-size:28px; color:var(--ink);}
-  .pin:active{transform:translate(-50%,-50%) scale(.9);}
-  .pin .cnt{position:absolute; top:-5px; right:-5px; background:var(--accent); color:#fff;
-    font-size:11px; min-width:20px; height:20px; border-radius:10px; display:flex;
-    align-items:center; justify-content:center; padding:0 5px; border:2px solid #fff; font-weight:600;}
-  .pin.me{width:18px; height:18px; border:3px solid #fff; background:var(--blue);
-    box-shadow:0 0 0 7px rgba(59,130,246,.18);}
-  .map-fab{position:absolute; right:18px; bottom:20px; z-index:10; display:flex;
-    flex-direction:column; align-items:flex-end; gap:12px;}
+  .map-fab{position:absolute; right:18px; bottom:20px; z-index:10; display:flex; flex-direction:column; align-items:flex-end; gap:12px;}
   .iconbtn.float{background:#fff; box-shadow:var(--shadow);}
-  .cam-fab{background:var(--ink); color:#fff; font-weight:600; font-size:15px; padding:15px 22px;
-    border-radius:999px; box-shadow:0 8px 22px rgba(0,0,0,.22); cursor:pointer;
-    display:flex; align-items:center; gap:8px; white-space:nowrap; transition:.15s;}
+  .cam-fab{background:var(--ink); color:#fff; font-weight:600; font-size:15px; padding:15px 22px; border-radius:999px;
+    box-shadow:0 8px 22px rgba(0,0,0,.22); cursor:pointer; display:flex; align-items:center; gap:8px; white-space:nowrap; transition:.15s;}
   .cam-fab .i{font-size:19px;}
   .cam-fab:active{transform:scale(.96);}
+  .map-empty{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:var(--ink2);
+    z-index:8; background:rgba(255,255,255,.9); border:1px solid var(--line); border-radius:var(--r); padding:22px 26px; box-shadow:var(--shadow); max-width:260px;}
+  .map-empty .big{font-size:46px;}
+  .map-empty p{margin:10px 0 0; font-size:13px; line-height:1.6;}
+  /* custom map marker */
+  .cat-marker{width:46px; height:46px; border-radius:50%; border:3px solid #fff; background:#fff;
+    box-shadow:0 4px 14px rgba(0,0,0,.18); overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:24px;}
+  .cat-marker img{width:100%; height:100%; object-fit:cover;}
 
-  /* ===== CAMERA ===== */
+  /* CAMERA */
   .cam{flex:1; background:#000; position:relative; display:flex; flex-direction:column;}
-  .cam-view{flex:1; position:relative; overflow:hidden;
-    background:radial-gradient(circle at 50% 42%, #f0ece6, #d8d2c8 78%);
-    display:flex; align-items:center; justify-content:center;}
-  .cam-cat{font-size:150px; color:#a59f95;}
-  .focusbox{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-    width:236px; height:236px; border:1.5px solid rgba(255,255,255,.85); border-radius:26px;}
+  .cam-view{flex:1; position:relative; overflow:hidden; background:#1a1a1a; display:flex; align-items:center; justify-content:center;}
+  .cam-view video{width:100%; height:100%; object-fit:cover;}
+  .focusbox{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:236px; height:236px;
+    border:1.5px solid rgba(255,255,255,.85); border-radius:26px; pointer-events:none;}
   .focusbox span{position:absolute; width:24px; height:24px; border:3px solid #fff;}
   .focusbox span:nth-child(1){top:-2px; left:-2px; border-right:0; border-bottom:0; border-radius:10px 0 0 0;}
   .focusbox span:nth-child(2){top:-2px; right:-2px; border-left:0; border-bottom:0; border-radius:0 10px 0 0;}
   .focusbox span:nth-child(3){bottom:-2px; left:-2px; border-right:0; border-top:0; border-radius:0 0 0 10px;}
   .focusbox span:nth-child(4){bottom:-2px; right:-2px; border-left:0; border-top:0; border-radius:0 0 10px 0;}
-  .cam-hint{position:absolute; top:72px; left:0; right:0; text-align:center; color:#fff;
-    font-size:13px; font-weight:500; text-shadow:0 1px 6px rgba(0,0,0,.4);}
+  .cam-hint{position:absolute; top:72px; left:0; right:0; text-align:center; color:#fff; font-size:13px; font-weight:500;
+    text-shadow:0 1px 6px rgba(0,0,0,.5); padding:0 24px; pointer-events:none;}
   .cam-bar{height:150px; background:#000; display:flex; align-items:center; justify-content:space-around; padding:0 34px;}
-  .cam-bar .smallbtn{color:#fff; font-size:12px; display:flex; flex-direction:column;
-    align-items:center; gap:7px; cursor:pointer; width:60px; opacity:.85;}
+  .cam-bar .smallbtn{color:#fff; font-size:12px; display:flex; flex-direction:column; align-items:center; gap:7px; cursor:pointer; width:60px; opacity:.85;}
   .cam-bar .smallbtn .ic{font-size:24px;}
-  .bigshutter{width:74px; height:74px; border-radius:50%; background:#fff;
-    border:4px solid rgba(255,255,255,.5); cursor:pointer; box-shadow:0 0 0 3px #000 inset; transition:.15s;}
+  .bigshutter{width:74px; height:74px; border-radius:50%; background:#fff; border:4px solid rgba(255,255,255,.5);
+    cursor:pointer; box-shadow:0 0 0 3px #000 inset; transition:.15s;}
   .bigshutter:active{transform:scale(.92);}
 
-  /* ===== PROCESSING ===== */
-  .proc{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:34px; text-align:center;}
-  .cutstage{position:relative; width:236px; height:236px;}
-  .cut-orig,.cut-out{position:absolute; inset:0; border-radius:var(--r);
-    display:flex; align-items:center; justify-content:center; font-size:130px;}
-  .cut-orig{background:radial-gradient(circle at 50% 45%, #f0ece6, #ddd6cb); color:#a59f95; box-shadow:var(--shadow-soft);}
-  .cut-out{opacity:0; transition:opacity .8s; color:var(--placeholder);
+  /* die-cut sticker outline (white edge + soft shadow), animatable via @property */
+  @property --ow{ syntax:'<length>'; inherits:false; initial-value:0px; }
+  .die-cut{ --ow:2px;
+    filter:
+      drop-shadow(var(--ow) 0 0 #fff) drop-shadow(calc(-1 * var(--ow)) 0 0 #fff)
+      drop-shadow(0 var(--ow) 0 #fff) drop-shadow(0 calc(-1 * var(--ow)) 0 #fff)
+      drop-shadow(var(--ow) var(--ow) 0 #fff) drop-shadow(calc(-1 * var(--ow)) var(--ow) 0 #fff)
+      drop-shadow(var(--ow) calc(-1 * var(--ow)) 0 #fff) drop-shadow(calc(-1 * var(--ow)) calc(-1 * var(--ow)) 0 #fff)
+      drop-shadow(0 5px 7px rgba(0,0,0,.16)); }
+
+  /* PROCESSING */
+  .proc{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:30px; padding:34px; text-align:center;}
+  #cutstage{position:relative; width:240px; height:256px; border-radius:var(--r); overflow:hidden; box-shadow:var(--shadow);
     background-image:linear-gradient(45deg,#eee 25%,transparent 25%),linear-gradient(-45deg,#eee 25%,transparent 25%),
       linear-gradient(45deg,transparent 75%,#eee 75%),linear-gradient(-45deg,transparent 75%,#eee 75%);
-    background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0px; background-color:#fff; box-shadow:var(--shadow);}
-  .cut-out.show{opacity:1;}
-  .scanline{position:absolute; left:8px; right:8px; height:2px; top:0;
-    background:linear-gradient(90deg,transparent,var(--accent),transparent); animation:scan 1.6s ease-in-out infinite; border-radius:2px;}
-  @keyframes scan{0%,100%{top:8%;} 50%{top:92%;}}
+    background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0px; background-color:#fff;}
+  #cutstage .cut-out,#cutstage .cut-orig{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;}
+  #cutstage .cut-out{z-index:1;}
+  #cutstage .cut-orig{z-index:2; background:#f0ece6; opacity:1; transition:opacity 1s ease;}
+  #cutstage .cut-orig img{width:100%; height:100%; object-fit:contain;}
+  #cut-out-img{max-width:90%; max-height:90%; object-fit:contain; transform:scale(.96); --ow:0px;
+    transition:transform .55s cubic-bezier(.2,.8,.3,1.35), --ow .85s ease;}
+  #cutstage.done .cut-orig{opacity:0;}               /* background dissolves away */
+  #cutstage.done #cut-out-img{transform:scale(1);}    /* cat pops */
+  #cut-out-img.on{ --ow:2.4px; }                      /* white sticker edge traces in */
+  .trace{position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; transition:opacity .4s;}
+  .trace .sweep{position:absolute; left:-10%; right:-10%; height:44%; top:-44%;
+    background:linear-gradient(180deg, transparent, rgba(224,138,79,.30) 55%, rgba(255,255,255,.55) 70%, transparent);
+    filter:blur(3px); animation:sweep 1.5s ease-in-out infinite;}
+  @keyframes sweep{0%{top:-44%;} 100%{top:100%;}}
+  #cutstage.done .trace{opacity:0;}
   .proc h3{margin:0; font-size:18px; letter-spacing:-.02em; font-weight:600;}
-  .proc p{margin:0; color:var(--ink2); font-size:13px; max-width:240px;}
-  .dots span{display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--ink3); margin:0 3px; animation:blink 1.2s infinite;}
-  .dots span:nth-child(2){animation-delay:.2s;} .dots span:nth-child(3){animation-delay:.4s;}
-  @keyframes blink{0%,100%{opacity:.25;} 50%{opacity:1;}}
+  .proc p{margin:0; color:var(--ink2); font-size:13px; max-width:250px;}
+  .proc-bar{width:200px; height:6px; background:var(--bg2); border-radius:999px; overflow:hidden; margin:6px auto 0;}
+  .proc-bar > i{display:block; height:100%; width:8%; background:var(--accent); border-radius:999px; transition:width .35s;}
 
-  /* ===== NEW CARD ===== */
-  .sticker{margin:18px auto 0; width:200px; height:200px; border-radius:26px; color:var(--placeholder);
+  /* NEW CARD */
+  .sticker{margin:18px auto 0; width:200px; height:200px; border-radius:26px; overflow:hidden;
     background-image:linear-gradient(45deg,#f0f0ee 25%,transparent 25%),linear-gradient(-45deg,#f0f0ee 25%,transparent 25%),
       linear-gradient(45deg,transparent 75%,#f0f0ee 75%),linear-gradient(-45deg,transparent 75%,#f0f0ee 75%);
     background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0px; background-color:#fff;
-    display:flex; align-items:center; justify-content:center; font-size:120px; box-shadow:var(--shadow); position:relative;}
-  .sticker .badge{position:absolute; bottom:10px; right:10px; background:#fff; color:var(--accent);
-    font-size:11px; font-weight:600; padding:5px 11px; border-radius:999px; box-shadow:var(--shadow-soft);
-    border:1px solid var(--line); display:flex; align-items:center; gap:5px;}
+    box-shadow:var(--shadow); position:relative;}
+  .sticker img{width:100%; height:100%; object-fit:contain;}
+  .sticker .badge{position:absolute; bottom:10px; right:10px; background:#fff; color:var(--accent); font-size:11px; font-weight:600;
+    padding:5px 11px; border-radius:999px; box-shadow:var(--shadow-soft); border:1px solid var(--line); display:flex; align-items:center; gap:5px;}
   .sticker .badge .i{font-size:13px;}
   .field{padding:0 20px; margin-top:22px;}
   .field label{font-size:12px; color:var(--ink2); display:block; margin-bottom:9px; letter-spacing:.01em; font-weight:500;}
-  .input{background:var(--bg2); border:1px solid var(--line); border-radius:var(--r-sm); padding:14px 15px;
-    font-size:15px; color:var(--ink); width:100%; display:flex; align-items:center; gap:8px;}
-  .input.ph{color:var(--ink3);}
+  .input{background:var(--bg2); border:1px solid var(--line); border-radius:var(--r-sm); padding:14px 15px; font-size:15px;
+    color:var(--ink); width:100%; display:flex; align-items:center; gap:8px; font-family:inherit; outline:none;}
+  input.input::placeholder{color:var(--ink3);}
   .breeds{display:flex; gap:8px; flex-wrap:wrap;}
-  .chip{padding:10px 15px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:13px;
-    cursor:pointer; display:flex; gap:6px; align-items:center; color:var(--ink); transition:.15s;}
+  .chip{padding:10px 15px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:13px; cursor:pointer;
+    display:flex; gap:6px; align-items:center; color:var(--ink); transition:.15s;}
   .chip.on{border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:600;}
   .chip .pct{color:var(--ink3); font-size:11px;}
   .chip.on .pct{color:var(--accent);}
-  .locrow{display:flex; align-items:center; gap:12px; background:var(--bg2); border:1px solid var(--line);
-    border-radius:var(--r-sm); padding:12px 14px;}
-  .locrow .mini-map{width:54px; height:54px; border-radius:11px; flex:none;
-    background:radial-gradient(circle at 70% 30%, #dbe7d4, #cfe6ea); position:relative; overflow:hidden;
-    display:flex; align-items:center; justify-content:center; color:var(--accent);}
+  .locrow{display:flex; align-items:center; gap:12px; background:var(--bg2); border:1px solid var(--line); border-radius:var(--r-sm); padding:12px 14px;}
+  .locrow .mini-map{width:54px; height:54px; border-radius:11px; flex:none; background:radial-gradient(circle at 70% 30%, #dbe7d4, #cfe6ea);
+    position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; color:var(--accent);}
   .locrow .mini-map .i{font-size:20px;}
   .locrow .t{flex:1; font-size:14px; font-weight:500;}
   .locrow .t small{display:block; color:var(--ink2); font-size:12px; margin-top:3px; font-weight:400;}
 
-  .primary{margin:26px 20px 8px; background:var(--ink); color:#fff; font-weight:600; border:0;
-    border-radius:var(--r); padding:17px; width:calc(100% - 40px); font-size:16px; cursor:pointer; transition:.15s; letter-spacing:.01em;}
+  .primary{margin:26px 20px 8px; background:var(--ink); color:#fff; font-weight:600; border:0; border-radius:var(--r);
+    padding:17px; width:calc(100% - 40px); font-size:16px; cursor:pointer; transition:.15s; letter-spacing:.01em;}
   .primary:active{transform:scale(.98);}
   .ghost{margin:0 20px; background:transparent; color:var(--ink2); border:0; padding:10px; width:calc(100% - 40px); font-size:14px; cursor:pointer;}
 
   /* re-encounter / merge */
-  .match{margin:16px 20px 0; background:var(--accent-soft); border:1px solid #f1ddc9; border-radius:var(--r);
-    padding:14px; display:flex; gap:12px; align-items:center;}
-  .match .av{width:46px; height:46px; border-radius:50%; background:#fff; flex:none; color:var(--placeholder);
-    display:flex; align-items:center; justify-content:center; font-size:30px; box-shadow:var(--shadow-soft);}
+  .match{margin:16px 20px 0; background:var(--accent-soft); border:1px solid #f1ddc9; border-radius:var(--r); padding:14px; display:flex; gap:12px; align-items:center;}
+  .match .av{width:46px; height:46px; border-radius:50%; background:#fff; flex:none; overflow:hidden; box-shadow:var(--shadow-soft);
+    display:flex; align-items:center; justify-content:center;}
+  .match .av img{width:100%; height:100%; object-fit:cover;}
   .match .mt{flex:1; font-size:13px; line-height:1.5;}
   .match .mt b{font-weight:600;} .match .mt small{color:var(--ink2); display:block; margin-top:2px;}
   .match-actions{display:flex; gap:10px; padding:14px 20px 0;}
-  .match-actions button{flex:1; border-radius:var(--r-sm); padding:13px; font-size:14px; font-weight:600;
-    cursor:pointer; transition:.15s; border:1px solid var(--line);}
+  .match-actions button{flex:1; border-radius:var(--r-sm); padding:13px; font-size:14px; font-weight:600; cursor:pointer; transition:.15s; border:1px solid var(--line);}
   .match-actions button:active{transform:scale(.97);}
   .btn-same{background:var(--accent); color:#fff; border-color:var(--accent);}
   .btn-new{background:#fff; color:var(--ink);}
-  .reencounter{margin:20px 0 4px; width:100%; background:var(--accent-soft); color:var(--accent);
-    border:1px solid #f1ddc9; border-radius:var(--r); padding:16px; font-size:15px; font-weight:600; cursor:pointer;
-    transition:.15s; display:flex; align-items:center; justify-content:center; gap:8px;}
+  .reencounter{margin:20px 0 4px; width:100%; background:var(--accent-soft); color:var(--accent); border:1px solid #f1ddc9;
+    border-radius:var(--r); padding:16px; font-size:15px; font-weight:600; cursor:pointer; transition:.15s; display:flex; align-items:center; justify-content:center; gap:8px;}
   .reencounter .i{font-size:18px;} .reencounter:active{transform:scale(.98);}
 
-  /* ===== COLLECTION ===== */
+  /* COLLECTION */
   .filterbar{display:flex; gap:8px; padding:2px 20px 14px; overflow-x:auto;}
   .filterbar::-webkit-scrollbar{display:none;}
   .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:4px 20px;}
-  .catcard{background:var(--card); border:1px solid var(--line); border-radius:var(--r); overflow:hidden;
-    cursor:pointer; transition:.15s; box-shadow:var(--shadow-soft);}
+  .catcard{background:var(--card); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; cursor:pointer; transition:.15s; box-shadow:var(--shadow-soft);}
   .catcard:active{transform:scale(.98);}
-  .catcard .ph{height:130px; display:flex; align-items:center; justify-content:center; font-size:62px; color:var(--placeholder);
-    background-image:linear-gradient(45deg,#f4f4f2 25%,transparent 25%),linear-gradient(-45deg,#f4f4f2 25%,transparent 25%),
-      linear-gradient(45deg,transparent 75%,#f4f4f2 75%),linear-gradient(-45deg,transparent 75%,#f4f4f2 75%);
-    background-size:18px 18px; background-position:0 0,0 9px,9px -9px,-9px 0px; background-color:#fbfbfa;}
+  .catcard .ph{height:132px; display:flex; align-items:center; justify-content:center; overflow:hidden;
+    background:radial-gradient(#eceae6 1px, transparent 1px) 0 0/16px 16px, #faf9f6;}
+  .catcard .ph img{max-width:78%; max-height:84%; object-fit:contain;}
   .catcard .meta{padding:11px 13px;}
   .catcard .meta b{font-size:14px; font-weight:600;}
   .catcard .meta small{display:block; color:var(--ink2); font-size:11px; margin-top:3px;}
+  .empty-state{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:70px 30px; text-align:center; color:var(--ink2);}
+  .empty-state .big{font-size:58px; margin-bottom:4px;}
+  .empty-state p{margin:0; font-size:14px; line-height:1.6;}
 
-  /* ===== DETAIL ===== */
-  .hero{height:320px; background:#fbfbfa; display:flex; align-items:center; justify-content:center;
-    font-size:175px; color:var(--placeholder); position:relative; border-bottom:1px solid var(--line);}
+  /* DETAIL */
+  .hero{height:320px; background:radial-gradient(#ececea 1px, transparent 1px) 0 0/18px 18px, #fbfbfa;
+    display:flex; align-items:center; justify-content:center; position:relative; border-bottom:1px solid var(--line); overflow:hidden;}
+  .hero img{max-width:86%; max-height:86%; object-fit:contain;}
   .hero .back{position:absolute; top:58px; left:18px; background:#fff; box-shadow:var(--shadow);}
   .detail-body{padding:22px 20px;}
   .detail-body h2{margin:0 0 3px; font-size:27px; letter-spacing:-.03em; font-weight:600;}
@@ -235,12 +230,10 @@
   .infoline{display:flex; gap:12px; align-items:center; padding:14px 0; border-bottom:1px solid var(--line); font-size:14px; font-weight:500;}
   .infoline .ic{font-size:18px; color:var(--ink2);}
   .infoline .v{color:var(--ink2); margin-left:auto; font-weight:400;}
-  .detail-map{height:150px; border-radius:var(--r); margin-top:20px; position:relative; overflow:hidden;
-    background:radial-gradient(circle at 70% 30%, #dbe7d4 0 70px, transparent 72px), #eef0ec; border:1px solid var(--line);}
-  .detail-map .pin{top:50%; left:50%;}
+  .detail-map{height:150px; border-radius:var(--r); margin-top:20px; position:relative; overflow:hidden; border:1px solid var(--line); background:#eef0ec;}
   .empty-note{text-align:center; color:var(--ink3); font-size:12px; padding:32px 20px;}
 
-  /* ===== STATS ===== */
+  /* STATS */
   .stats-body{padding:0 20px 96px;}
   .bigstat{text-align:center; padding:24px 0 10px;}
   .bigstat .num{font-size:64px; font-weight:700; letter-spacing:-.04em; line-height:1;}
@@ -254,33 +247,31 @@
   .panel h4 .i{font-size:17px; color:var(--accent);}
   .barrow{display:flex; align-items:center; gap:10px; margin-bottom:13px; font-size:13px;}
   .barrow:last-child{margin-bottom:0;}
-  .barrow .name{width:74px; flex:none; color:var(--ink);}
+  .barrow .name{width:84px; flex:none; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .barrow .track{flex:1; height:9px; background:var(--bg2); border-radius:999px; overflow:hidden;}
   .barrow .fill{height:100%; background:var(--accent); border-radius:999px;}
   .barrow .val{width:30px; text-align:right; color:var(--ink2); flex:none;}
   .rank{display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--line); font-size:14px;}
   .rank:last-child{border-bottom:0;}
-  .rank .idx{width:22px; height:22px; border-radius:50%; background:var(--bg2); color:var(--ink2); font-size:12px;
-    font-weight:600; display:flex; align-items:center; justify-content:center; flex:none;}
+  .rank .idx{width:22px; height:22px; border-radius:50%; background:var(--bg2); color:var(--ink2); font-size:12px; font-weight:600;
+    display:flex; align-items:center; justify-content:center; flex:none;}
   .rank .idx.top{background:var(--accent); color:#fff;}
   .rank .city{flex:1; font-weight:500;} .rank .c{color:var(--ink2);}
   .months{display:flex; align-items:flex-end; gap:7px; height:110px; padding-top:6px;}
   .months .m{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end;}
-  .months .col{width:100%; background:var(--accent); border-radius:6px 6px 0 0; opacity:.85;}
+  .months .col{width:100%; background:var(--accent); border-radius:6px 6px 0 0; opacity:.85; min-height:2px;}
   .months .ml{font-size:10px; color:var(--ink3);}
 
-  /* toast */
-  .toast{position:absolute; bottom:104px; left:50%; transform:translateX(-50%) translateY(20px);
-    background:var(--ink); color:#fff; font-weight:600; padding:12px 22px; border-radius:999px;
-    font-size:14px; opacity:0; transition:.3s; z-index:60; pointer-events:none; box-shadow:var(--shadow);}
+  .toast{position:absolute; bottom:104px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff;
+    font-weight:600; padding:12px 22px; border-radius:999px; font-size:14px; opacity:0; transition:.3s; z-index:70; pointer-events:none; box-shadow:var(--shadow); max-width:80%; text-align:center;}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 </style>
 </head>
 <body>
 <div class="stage">
   <div class="stage-head">
-    <h1>喵迹 Catlas · 可点击线框原型</h1>
-    <p>点底部中间的快门走完整流程：拍照 → 抠图去背景 → 识别品种 → 取昵称+定位 → 进图鉴 / 地图。点地图上的猫或图鉴卡片看详情，「统计」看足迹报告。</p>
+    <h1>喵迹 Catlas</h1>
+    <p>遇见街角的猫，拍下来，自动抠图去背景、识别品种、标记地点，收进你的图鉴和地图。</p>
     <span class="tag">PWA · 端上 AI · 纯本地存储</span>
   </div>
 
@@ -291,21 +282,16 @@
       <!-- 1. MAP -->
       <section class="screen active" id="s-map">
         <div class="map">
-          <div class="land"></div>
+          <div id="map-host" class="leaflet-host"></div>
           <div class="stat-pill">
-            <span>遇见 <b>12</b> 只</span><span>足迹 <b>5</b> 地</span><span>品种 <b>7</b> 种</span>
+            <span>遇见 <b id="stat-cats">0</b> 只</span><span>足迹 <b id="stat-places">0</b> 地</span><span>品种 <b id="stat-breeds">0</b> 种</span>
           </div>
-          <div class="road" style="top:30%; left:-5%; width:110%; height:9px; transform:rotate(-8deg);"></div>
-          <div class="road minor" style="top:0; left:55%; width:7px; height:100%; transform:rotate(6deg);"></div>
-          <div class="road minor" style="top:62%; left:-5%; width:80%; height:6px; transform:rotate(4deg);"></div>
-          <div class="pin me" style="top:54%; left:48%;"></div>
-          <div class="pin" style="top:34%; left:30%;" onclick="go('detail')"><span class="i" data-ic="cat" data-e="🐱"></span><span class="cnt">3</span></div>
-          <div class="pin" style="top:48%; left:66%;" onclick="go('detail')"><span class="i" data-ic="cat" data-e="🐈"></span></div>
-          <div class="pin" style="top:66%; left:40%;" onclick="go('detail')"><span class="i" data-ic="cat" data-e="🐈‍⬛"></span><span class="cnt">2</span></div>
-          <div class="pin" style="top:24%; left:62%;" onclick="go('detail')"><span class="i" data-ic="cat" data-e="😺"></span></div>
-          <div class="pin" style="top:74%; left:72%;" onclick="go('detail')"><span class="i" data-ic="cat" data-e="😼"></span></div>
+          <div class="map-empty" id="map-empty">
+            <div class="big">🐾</div>
+            <p>还没有遇见任何猫<br>点「拍猫」记录第一只吧</p>
+          </div>
           <div class="map-fab">
-            <div class="iconbtn float" title="定位到我"><span class="i" data-ic="locate"></span></div>
+            <div class="iconbtn float" title="定位到我" onclick="locateMe()"><span class="i" data-ic="locate"></span></div>
             <div class="cam-fab" onclick="go('cam')"><span class="i" data-ic="camera"></span>拍猫</div>
           </div>
         </div>
@@ -315,12 +301,13 @@
       <section class="screen" id="s-cam">
         <div class="cam">
           <div class="cam-view">
-            <div class="cam-hint">把猫咪放进框里 · 自动对焦</div>
-            <div class="cam-cat"><span class="i" data-ic="cat" data-e="🐈"></span></div>
+            <div class="cam-hint" id="cam-hint">把猫咪放进框里 · 点下方快门</div>
+            <video id="cam-video" autoplay playsinline muted></video>
             <div class="focusbox"><span></span><span></span><span></span><span></span></div>
           </div>
           <div class="cam-bar">
-            <div class="smallbtn" onclick="go('map')"><span class="ic i" data-ic="image"></span>相册</div>
+            <label class="smallbtn"><span class="ic i" data-ic="image"></span>相册
+              <input id="cam-file" type="file" accept="image/*" hidden></label>
             <div class="bigshutter" onclick="capture()"></div>
             <div class="smallbtn" onclick="go('map')"><span class="ic i" data-ic="close"></span>取消</div>
           </div>
@@ -331,15 +318,15 @@
       <section class="screen" id="s-proc">
         <div class="topbar"><div class="iconbtn back" onclick="go('cam')"><span class="i" data-ic="chevron"></span></div><h2>提取猫咪</h2></div>
         <div class="proc">
-          <div class="cutstage">
-            <div class="cut-orig"><span class="i" data-ic="cat" data-e="🐈"></span></div>
-            <div class="cut-out" id="cutOut"><span class="i" data-ic="cat" data-e="🐈"></span></div>
-            <div class="scanline" id="scanLine"></div>
+          <div id="cutstage">
+            <div class="cut-out"><img id="cut-out-img" class="die-cut" alt=""></div>
+            <div class="cut-orig"><img id="cut-orig-img" alt=""></div>
+            <div class="trace"><span class="sweep"></span></div>
           </div>
           <div>
-            <h3 id="procTitle">正在去除背景…</h3>
-            <p id="procSub">端上模型分割猫咪轮廓，不上传图片</p>
-            <div class="dots" id="procDots"><span></span><span></span><span></span></div>
+            <h3 id="procTitle">正在识别猫咪轮廓…</h3>
+            <p id="procSub">端上模型分割，图片不上传</p>
+            <div class="proc-bar"><i id="procBar"></i></div>
           </div>
         </div>
       </section>
@@ -348,42 +335,24 @@
       <section class="screen" id="s-new">
         <div class="topbar bordered"><div class="iconbtn back" onclick="go('cam')"><span class="i" data-ic="chevron"></span></div><h2>这只猫</h2></div>
         <div class="body">
-          <div id="matchBlock">
-            <div class="match">
-              <div class="av"><span class="i" data-ic="cat" data-e="🐈"></span></div>
-              <div class="mt"><b>好像是你见过的「巷口大橘」</b><small>同一地点 · 上次遇见 6 天前 · 相似度 91%</small></div>
-            </div>
-            <div class="match-actions">
-              <button class="btn-same" onclick="markSame()">是同一只 · 遇见 +1</button>
-              <button class="btn-new" onclick="dismissMatch()">不是，新建</button>
-            </div>
-          </div>
-
-          <div class="sticker"><span class="i" data-ic="cat" data-e="🐈"></span><span class="badge"><span class="i" data-ic="check"></span>已抠图</span></div>
-
+          <div id="matchBlock" style="display:none"></div>
+          <div class="sticker"><img id="new-cut" class="die-cut" alt=""><span class="badge"><span class="i" data-ic="check"></span>已抠图</span></div>
           <div class="field">
             <label>识别品种（点选确认）</label>
-            <div class="breeds">
-              <div class="chip on" onclick="pick(this)">橘猫 / 田园猫 <span class="pct">82%</span></div>
-              <div class="chip" onclick="pick(this)">中华田园猫 <span class="pct">11%</span></div>
-              <div class="chip" onclick="pick(this)">异国短毛 <span class="pct">4%</span></div>
-            </div>
+            <div class="breeds" id="new-breeds"></div>
           </div>
-
           <div class="field">
             <label>给它取个昵称</label>
-            <div class="input ph">例如「巷口大橘」「窗台白爪」…</div>
+            <input class="input" id="new-name" placeholder="例如「巷口大橘」「窗台白爪」…" maxlength="20">
           </div>
-
           <div class="field">
             <label>遇见地点（自动定位）</label>
             <div class="locrow">
               <div class="mini-map"><span class="i" data-ic="pin"></span></div>
-              <div class="t">杭州市 · 西湖区<small>文一西路某小区门口 · 刚刚</small></div>
-              <div class="iconbtn" style="width:30px;height:30px;font-size:13px;"><span class="i" data-ic="edit"></span></div>
+              <div class="t" id="new-loc-city">定位中…<small id="new-loc-sub"></small></div>
+              <div class="iconbtn" style="width:30px;height:30px;font-size:13px;" onclick="retryLocate()"><span class="i" data-ic="locate"></span></div>
             </div>
           </div>
-
           <button class="primary" onclick="save()">保存到图鉴</button>
           <button class="ghost" onclick="go('cam')">重拍</button>
         </div>
@@ -392,22 +361,16 @@
       <!-- 5. COLLECTION -->
       <section class="screen" id="s-book">
         <div class="topbar">
-          <h2>我的图鉴 <span class="sub">12 只 · 7 个品种</span></h2>
-          <div class="iconbtn"><span class="i" data-ic="search"></span></div>
+          <h2>我的图鉴 <span class="sub" id="book-sub">0 只</span></h2>
         </div>
-        <div class="filterbar">
-          <div class="chip on">全部</div><div class="chip">按地点</div><div class="chip">按品种</div><div class="chip">最近</div>
+        <div class="filterbar" id="filterbar">
+          <div class="chip on" data-sort="recent">全部</div>
+          <div class="chip" data-sort="place">按地点</div>
+          <div class="chip" data-sort="breed">按品种</div>
         </div>
         <div class="body" style="padding-top:0;">
-          <div class="grid">
-            <div class="catcard" onclick="go('detail')"><div class="ph"><span class="i" data-ic="cat" data-e="🐈"></span></div><div class="meta"><b>巷口大橘</b><small>橘猫 · 西湖区</small></div></div>
-            <div class="catcard" onclick="go('detail')"><div class="ph"><span class="i" data-ic="cat" data-e="🐈‍⬛"></span></div><div class="meta"><b>夜行者</b><small>玄猫 · 滨江区</small></div></div>
-            <div class="catcard" onclick="go('detail')"><div class="ph"><span class="i" data-ic="cat" data-e="😺"></span></div><div class="meta"><b>窗台白爪</b><small>奶牛猫 · 拱墅区</small></div></div>
-            <div class="catcard" onclick="go('detail')"><div class="ph"><span class="i" data-ic="cat" data-e="🐱"></span></div><div class="meta"><b>布丁</b><small>布偶 · 上城区</small></div></div>
-            <div class="catcard" onclick="go('detail')"><div class="ph"><span class="i" data-ic="cat" data-e="🐈"></span></div><div class="meta"><b>三花</b><small>狸花 · 余杭区</small></div></div>
-            <div class="catcard" onclick="go('detail')"><div class="ph"><span class="i" data-ic="cat" data-e="😼"></span></div><div class="meta"><b>老板</b><small>狸花 · 西湖区</small></div></div>
-          </div>
-          <div class="empty-note">下滑加载更多 · 共 12 只</div>
+          <div class="grid" id="grid"></div>
+          <div id="book-empty"></div>
         </div>
       </section>
 
@@ -416,59 +379,33 @@
         <div class="body" style="padding-bottom:40px;">
           <div class="hero">
             <div class="iconbtn back" onclick="go('book')"><span class="i" data-ic="chevron"></span></div>
-            <span class="i" data-ic="cat" data-e="🐈"></span>
+            <img id="d-hero-img" class="die-cut" alt="">
           </div>
           <div class="detail-body">
-            <h2>巷口大橘</h2>
-            <div class="breed">橘猫 / 中华田园猫 · 置信度 82%</div>
-            <div class="infoline"><span class="ic i" data-ic="pin"></span>遇见地点 <span class="v">杭州 西湖区</span></div>
-            <div class="infoline"><span class="ic i" data-ic="calendar"></span>初次遇见 <span class="v">2026-06-25</span></div>
-            <div class="infoline"><span class="ic i" data-ic="repeat"></span>遇见次数 <span class="v">3 次</span></div>
-            <div class="infoline"><span class="ic i" data-ic="tag"></span>性格备注 <span class="v">亲人、爱蹭腿</span></div>
+            <h2 id="d-name"></h2>
+            <div class="breed" id="d-breed"></div>
+            <div class="infoline"><span class="ic i" data-ic="pin"></span>遇见地点 <span class="v" id="d-place">—</span></div>
+            <div class="infoline"><span class="ic i" data-ic="calendar"></span>初次遇见 <span class="v" id="d-first">—</span></div>
+            <div class="infoline"><span class="ic i" data-ic="repeat"></span>遇见次数 <span class="v" id="d-count">—</span></div>
             <button class="reencounter" onclick="reencounter()"><span class="i" data-ic="repeat"></span>又见到啦 · 遇见 +1</button>
-            <div class="detail-map"><div class="pin"><span class="i" data-ic="cat" data-e="🐈"></span></div></div>
+            <div class="detail-map" id="d-map-wrap"><div id="detail-map" class="leaflet-host"></div></div>
           </div>
         </div>
       </section>
 
       <!-- 7. STATS -->
       <section class="screen" id="s-stats">
-        <div class="topbar"><h2>足迹报告 <span class="sub">2026 上半年</span></h2></div>
+        <div class="topbar"><h2>足迹报告</h2></div>
         <div class="body stats-body">
-          <div class="bigstat"><div class="num">12</div><div class="lbl">这半年你遇见了 12 只猫</div></div>
+          <div class="bigstat"><div class="num" id="st-total">0</div><div class="lbl" id="st-lbl">还没有遇见的猫</div></div>
           <div class="stat-quick">
-            <div class="quick-card"><div class="n">5</div><div class="l">城市足迹</div></div>
-            <div class="quick-card"><div class="n">7</div><div class="l">不同品种</div></div>
-            <div class="quick-card"><div class="n">23</div><div class="l">遇见次数</div></div>
+            <div class="quick-card"><div class="n" id="st-cities">0</div><div class="l">城市足迹</div></div>
+            <div class="quick-card"><div class="n" id="st-breeds">0</div><div class="l">不同品种</div></div>
+            <div class="quick-card"><div class="n" id="st-enc">0</div><div class="l">遇见次数</div></div>
           </div>
-
-          <div class="panel">
-            <h4><span class="i" data-ic="chart"></span>品种分布</h4>
-            <div class="barrow"><span class="name">橘猫/田园</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="val">5</span></div>
-            <div class="barrow"><span class="name">狸花猫</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val">3</span></div>
-            <div class="barrow"><span class="name">奶牛猫</span><span class="track"><span class="fill" style="width:40%"></span></span><span class="val">2</span></div>
-            <div class="barrow"><span class="name">布偶</span><span class="track"><span class="fill" style="width:20%"></span></span><span class="val">1</span></div>
-            <div class="barrow"><span class="name">玄猫</span><span class="track"><span class="fill" style="width:20%"></span></span><span class="val">1</span></div>
-          </div>
-
-          <div class="panel">
-            <h4><span class="i" data-ic="pin"></span>城市足迹排行</h4>
-            <div class="rank"><span class="idx top">1</span><span class="city">杭州</span><span class="c">7 只</span></div>
-            <div class="rank"><span class="idx">2</span><span class="city">上海</span><span class="c">3 只</span></div>
-            <div class="rank"><span class="idx">3</span><span class="city">成都</span><span class="c">2 只</span></div>
-          </div>
-
-          <div class="panel">
-            <h4><span class="i" data-ic="chart"></span>月度趋势</h4>
-            <div class="months">
-              <div class="m"><div class="col" style="height:25%"></div><span class="ml">1月</span></div>
-              <div class="m"><div class="col" style="height:45%"></div><span class="ml">2月</span></div>
-              <div class="m"><div class="col" style="height:35%"></div><span class="ml">3月</span></div>
-              <div class="m"><div class="col" style="height:70%"></div><span class="ml">4月</span></div>
-              <div class="m"><div class="col" style="height:55%"></div><span class="ml">5月</span></div>
-              <div class="m"><div class="col" style="height:100%"></div><span class="ml">6月</span></div>
-            </div>
-          </div>
+          <div class="panel"><h4><span class="i" data-ic="chart"></span>品种分布</h4><div id="st-breed-bars"></div></div>
+          <div class="panel"><h4><span class="i" data-ic="pin"></span>城市足迹排行</h4><div id="st-city-ranks"></div></div>
+          <div class="panel"><h4><span class="i" data-ic="chart"></span>月度趋势</h4><div class="months" id="st-months"></div></div>
         </div>
       </section>
 
@@ -479,70 +416,15 @@
       <div class="tab" data-s="book" onclick="go('book')"><span class="ic i" data-ic="grid"></span>图鉴</div>
       <div class="shutter-tab"><div class="shutter" onclick="go('cam')"><span class="i" data-ic="camera"></span></div></div>
       <div class="tab" data-s="stats" onclick="go('stats')"><span class="ic i" data-ic="chart"></span>统计</div>
-      <div class="tab" data-s="me" onclick="go('book')"><span class="ic i" data-ic="user"></span>我的</div>
+      <div class="tab" data-s="me" onclick="go('stats')"><span class="ic i" data-ic="user"></span>我的</div>
     </nav>
 
-    <div class="toast" id="toast">已保存到图鉴</div>
+    <div class="toast" id="toast"></div>
   </div>
 </div>
 
-<script>
-  // ---- SVG icon set (line style, 1.8 stroke, currentColor) + cat silhouette ----
-  const S='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">';
-  const ICONS = {
-    map:    S+'<polygon points="3 7 9 4 15 7 21 4 21 17 15 20 9 17 3 20 3 7"/><line x1="9" y1="4" x2="9" y2="17"/><line x1="15" y1="7" x2="15" y2="20"/></svg>',
-    grid:   S+'<rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>',
-    camera: S+'<path d="M4 8a2 2 0 0 1 2-2h1.5L9 4h6l1.5 2H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.3"/></svg>',
-    chart:  S+'<line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="9"/></svg>',
-    user:   S+'<circle cx="12" cy="8" r="3.6"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>',
-    locate: S+'<circle cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22.5" y2="12"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>',
-    chevron:S+'<polyline points="15 5 8 12 15 19"/></svg>',
-    search: S+'<circle cx="11" cy="11" r="7"/><line x1="16.2" y1="16.2" x2="21" y2="21"/></svg>',
-    edit:   S+'<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17z"/><line x1="13.5" y1="6.5" x2="17.5" y2="10.5"/></svg>',
-    check:  S+'<polyline points="5 12.5 10 17.5 19 6.5"/></svg>',
-    pin:    S+'<path d="M12 21s-7-6.4-7-12a7 7 0 0 1 14 0c0 5.6-7 12-7 12z"/><circle cx="12" cy="9" r="2.6"/></svg>',
-    calendar:S+'<rect x="4" y="5" width="16" height="16" rx="2.2"/><line x1="4" y1="9.5" x2="20" y2="9.5"/><line x1="9" y1="3" x2="9" y2="6"/><line x1="15" y1="3" x2="15" y2="6"/></svg>',
-    repeat: S+'<polyline points="17 1.5 21 5.5 17 9.5"/><path d="M3 11V9.5a4 4 0 0 1 4-4h14"/><polyline points="7 22.5 3 18.5 7 14.5"/><path d="M21 13v1.5a4 4 0 0 1-4 4H3"/></svg>',
-    tag:    S+'<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V4a1 1 0 0 1 1-1h9l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"/></svg>',
-    close:  S+'<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>',
-    image:  S+'<rect x="3" y="4" width="18" height="16" rx="2.2"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M4 18l5-5 4 4 2.5-2.5L21 17"/></svg>'
-  };
-  // cat photo: emoji placeholder until real photo capture is implemented.
-  // data-e overrides the default emoji per element.
-  function paintIcons(){
-    document.querySelectorAll('[data-ic]').forEach(e=>{
-      if(e.dataset.ic==='cat'){ e.textContent = e.dataset.e || '🐱'; e.classList.add('emoji'); }
-      else if(ICONS[e.dataset.ic]){ e.innerHTML=ICONS[e.dataset.ic]; }
-    });
-  }
-  paintIcons();
-
-  // ---- navigation ----
-  const tabScreens=['map','book','stats'];
-  function go(id){
-    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-    document.getElementById('s-'+id).classList.add('active');
-    document.getElementById('tabbar').style.display=tabScreens.includes(id)?'flex':'none';
-    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.s===id));
-    if(id==='proc') runProcessing();
-    if(id==='new'){ document.getElementById('matchBlock').style.display='block'; }
-  }
-  function capture(){ go('proc'); }
-  function runProcessing(){
-    const out=document.getElementById('cutOut'), line=document.getElementById('scanLine');
-    const title=document.getElementById('procTitle'), sub=document.getElementById('procSub'), dots=document.getElementById('procDots');
-    out.classList.remove('show'); line.style.display='block'; dots.style.display='block';
-    title.textContent='正在去除背景…'; sub.textContent='端上模型分割猫咪轮廓，不上传图片';
-    setTimeout(()=>{ out.classList.add('show'); title.textContent='识别品种…'; sub.textContent='离线比对常见猫种特征'; },1400);
-    setTimeout(()=>{ line.style.display='none'; dots.style.display='none'; title.textContent='搞定'; sub.textContent='已提取猫咪轮廓，识别为「橘猫」'; },2600);
-    setTimeout(()=>{ if(document.getElementById('s-proc').classList.contains('active')) go('new'); },3200);
-  }
-  function pick(el){ el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); el.classList.add('on'); }
-  function dismissMatch(){ document.getElementById('matchBlock').style.display='none'; }
-  function markSame(){ toast('巷口大橘 · 遇见 +1（共 4 次）'); setTimeout(()=>go('detail'),900); }
-  function reencounter(){ toast('又见到啦 · 遇见 +1'); }
-  function save(){ toast('已保存到图鉴'); setTimeout(()=>go('book'),1000); }
-  function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1400); }
-</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
