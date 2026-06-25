@@ -101,7 +101,11 @@
   .pin.me{width:18px; height:18px; border:3px solid #fff; background:#4a9eff;
     box-shadow:0 0 0 6px rgba(74,158,255,.25);}
   .map-fab{position:absolute; right:16px; bottom:16px; z-index:10; display:flex;
-    flex-direction:column; gap:10px;}
+    flex-direction:column; align-items:flex-end; gap:12px;}
+  .cam-fab{background:linear-gradient(145deg,var(--brand),var(--brand2)); color:#241300;
+    font-weight:700; font-size:15px; padding:14px 20px; border-radius:999px;
+    box-shadow:0 8px 22px rgba(255,138,61,.55); cursor:pointer; display:flex;
+    align-items:center; gap:6px; white-space:nowrap;}
 
   /* ===== CAMERA screen ===== */
   .cam{flex:1; background:#000; position:relative; display:flex; flex-direction:column;}
@@ -254,6 +258,7 @@
           <div class="pin" style="top:74%; left:72%;" onclick="go('detail')">🐱</div>
           <div class="map-fab">
             <div class="iconbtn" title="定位到我">🧭</div>
+            <div class="cam-fab" onclick="go('cam')">📷 拍猫</div>
           </div>
         </div>
       </section>
