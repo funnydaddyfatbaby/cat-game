@@ -1,0 +1,13 @@
+{
+  "name": "喵迹 Catlas",
+  "short_name": "喵迹",
+  "description": "遇见街角的猫，拍下来，抠图识别、标记地点，收进你的图鉴和地图。",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
