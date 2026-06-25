@@ -187,6 +187,10 @@
     padding:17px; width:calc(100% - 40px); font-size:16px; cursor:pointer; transition:.15s; letter-spacing:.01em;}
   .primary:active{transform:scale(.98);}
   .ghost{margin:0 20px; background:transparent; color:var(--ink2); border:0; padding:10px; width:calc(100% - 40px); font-size:14px; cursor:pointer;}
+  .new-footer{flex:none; padding:12px 20px calc(10px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--line);
+    background:rgba(255,255,255,.92); backdrop-filter:saturate(180%) blur(20px); display:flex; flex-direction:column; gap:2px;}
+  .new-footer .primary{margin:0; width:100%;}
+  .new-footer .ghost{margin:0; width:100%;}
 
   /* re-encounter / merge */
   .match{margin:16px 20px 0; background:var(--accent-soft); border:1px solid #f1ddc9; border-radius:var(--r); padding:14px; display:flex; gap:12px; align-items:center;}
@@ -353,7 +357,7 @@
         <div class="topbar bordered"><div class="iconbtn back" onclick="go('cam')"><span class="i" data-ic="chevron"></span></div><h2>这只猫</h2></div>
         <div class="body">
           <div id="matchBlock" style="display:none"></div>
-          <div class="sticker"><img id="new-cut" class="die-cut" alt=""><span class="badge"><span class="i" data-ic="check"></span>已抠图</span></div>
+          <div class="sticker"><img id="new-cut" class="die-cut" alt=""><span class="badge" id="cut-badge"><span class="i" data-ic="check"></span>已抠图</span></div>
           <div class="field">
             <label>识别品种（点选确认）</label>
             <div class="breeds" id="new-breeds"></div>
@@ -370,6 +374,8 @@
               <div class="iconbtn" style="width:30px;height:30px;font-size:13px;" onclick="retryLocate()"><span class="i" data-ic="locate"></span></div>
             </div>
           </div>
+        </div>
+        <div class="new-footer">
           <button class="primary" onclick="save()">保存到图鉴</button>
           <button class="ghost" onclick="go('cam')">重拍</button>
         </div>
