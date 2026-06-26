@@ -312,15 +312,13 @@ function detectMatch(){
   for(const cat of CATS){ if(cat.lat==null) continue; const d=haversine(pending.loc,{lat:cat.lat,lng:cat.lng}); if(d<bestD){bestD=d;best=cat;} }
   if(best && bestD<=60){
     pending.matchId = best.id;
-    const thumb = best.thumbBlob || best.cutBlob;
     box.innerHTML = `
       <div class="match">
-        <div class="av">${thumb?`<img src="${objURL(thumb)}">`:'🐱'}</div>
-        <div class="mt"><b>好像是你见过的「${escapeHtml(best.nickname)}」</b><small>同一地点 · 上次遇见 ${daysAgo(best.lastSeen)} · 约 ${Math.round(bestD)} 米</small></div>
-      </div>
-      <div class="match-actions">
-        <button class="btn-same" onclick="markSame()">是同一只 · 遇见 +1</button>
-        <button class="btn-new" onclick="dismissMatch()">不是，新建</button>
+        <div class="mt">疑似与 <b>「${escapeHtml(best.nickname)}」</b> 同一只 · ${daysAgo(best.lastSeen)} · 约 ${Math.round(bestD)}m</div>
+        <div class="match-actions">
+          <button class="btn-same" onclick="markSame()">是</button>
+          <button class="btn-new" onclick="dismissMatch()">否</button>
+        </div>
       </div>`;
     box.style.display='block';
   }
@@ -383,24 +381,35 @@ async function save(){
 }
 
 /* ============================ collection (swipeable card stack) ============================ */
-const CARD_TINTS = ['#ece4d8','#dde4ea','#e8e0e9','#e2e9e1','#efe7da','#e6e2dd'];
+// breed -> uppercase English tag (magazine style)
+const BREED_EN = {'中华田园猫':'DOMESTIC','田园猫':'DOMESTIC','狸花猫 / 虎斑':'TABBY','狸花猫':'TABBY','虎斑猫':'TABBY',
+  '奶牛猫':'TUXEDO','橘猫 / 田园猫':'GINGER','橘猫':'GINGER','布偶':'RAGDOLL','布偶猫':'RAGDOLL','暹罗猫':'SIAMESE',
+  '波斯猫':'PERSIAN','玄猫':'BLACK CAT','安哥拉猫':'ANGORA','异国短毛':'EXOTIC','猞猁（野猫）':'LYNX'};
+function breedEN(b){ return BREED_EN[b] || 'CAT'; }
+// 1-based sequence number by chronological (firstSeen) order
+let _noMap = {};
+function rebuildNoMap(){ _noMap = {}; CATS.slice().sort((a,b)=>a.firstSeen-b.firstSeen).forEach((c,i)=>{ _noMap[c.id]=i+1; }); }
+function catNo(cat){ return _noMap[cat.id] || 0; }
+function no2(n){ return String(n).padStart(2,'0'); }
+
 let bookIndex = 0;
 function cardTransform(off, dx, rot){
   if(off===0) return `translateX(${dx}px) rotate(${rot}deg)`;
-  const scale = 1 - off*0.055, ty = off*16, r = off===1 ? 2.6 : -2.6;
-  return `translateY(${ty}px) scale(${scale}) rotate(${r}deg)`;
+  const scale = 1 - off*0.04, ty = off*10, tx = off*9;   // side-back offset stack
+  return `translateY(${ty}px) translateX(${tx}px) scale(${scale})`;
 }
 function makeCard(cat, off){
-  const tint = CARD_TINTS[(bookIndex+off) % CARD_TINTS.length];
   const thumb = cat.thumbBlob || cat.cutBlob;
-  const place = cat.place ? (cat.place.district || cat.place.city || '') : '未定位';
+  const place = cat.place ? (cat.place.district || cat.place.city || '街角') : '街角';
+  const n = catNo(cat);
   const card = document.createElement('div');
   card.className = 'swipe-card'; card.dataset.off = off; card.dataset.id = cat.id;
-  card.style.setProperty('--tint', tint);
   card.style.zIndex = String(30 - off);
   card.style.transform = cardTransform(off, 0, 0);
-  card.innerHTML = `<div class="card-photo">${thumb?`<img class="die-cut" src="${objURL(thumb)}">`:'🐱'}</div>
-    <div class="card-info"><h3>${escapeHtml(cat.nickname)}</h3><div class="sub">${escapeHtml(cat.breed)} · ${escapeHtml(place)}</div></div>`;
+  if(off>0) card.style.boxShadow = 'none';
+  card.innerHTML = `<div class="card-photo">${thumb?`<img class="die-cut" src="${objURL(thumb)}">`:'🐱'}<span class="card-no">${no2(n)}</span></div>
+    <div class="card-name">No. ${no2(n)} — ${escapeHtml(cat.nickname)}</div>
+    <div class="card-sub">${breedEN(cat.breed)} · ${escapeHtml(place)}</div>`;
   return card;
 }
 function attachSwipe(card){
@@ -419,18 +428,21 @@ function attachSwipe(card){
   card.addEventListener('pointercancel', end);
 }
 function renderCollection(){
-  const wrap = $('stack-wrap'), hint = $('stack-hint');
+  rebuildNoMap();
+  const wrap = $('stack-wrap'), hint = $('stack-hint'), viewAll = $('view-all');
   wrap.innerHTML = '';
   if(!CATS.length){
-    $('book-sub').textContent = '';
-    hint.textContent = '';
-    wrap.innerHTML = `<div class="empty-state"><div class="big">🐾</div><p>还没有收藏任何猫<br>点下方快门，记录第一只吧</p></div>`;
+    $('book-sub').textContent = '图鉴';
+    hint.textContent = ''; viewAll.style.display = 'none';
+    wrap.innerHTML = `<div class="empty-state"><div class="big"><span class="i die-cut" data-ic="cat" data-e="🐾" style="font-size:40px"></span></div><p>还没有收藏任何猫<br>点下方快门，记录第一只</p></div>`;
+    paintIcons(wrap);
     return;
   }
   if(bookIndex < 0) bookIndex = 0;
   if(bookIndex > CATS.length-1) bookIndex = CATS.length-1;
-  $('book-sub').textContent = `${CATS.length} 只`;
-  hint.textContent = `${bookIndex+1} / ${CATS.length} · 左右滑动切换，点击看详情`;
+  $('book-sub').textContent = `图鉴 · ${CATS.length} encounters`;
+  hint.textContent = `— ${bookIndex+1} / ${CATS.length} · 左右滑动 —`;
+  viewAll.style.display = ''; viewAll.textContent = `查看全部 ${CATS.length} 只 ›`;
   // build back-to-front so the current card ends up on top and interactive
   const maxOff = Math.min(2, CATS.length-1-bookIndex);
   for(let off=maxOff; off>=0; off--){ wrap.appendChild(makeCard(CATS[bookIndex+off], off)); }
@@ -438,18 +450,44 @@ function renderCollection(){
   if(front) attachSwipe(front);
 }
 
+/* ============================ all (date-grouped overview) ============================ */
+function renderAll(){
+  rebuildNoMap();
+  const wrap = $('all-wrap'); wrap.innerHTML = '';
+  if(!CATS.length){ wrap.innerHTML = `<div class="empty-state"><p>还没有收藏任何猫</p></div>`; return; }
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const byDay = {};
+  CATS.slice().sort((a,b)=>b.firstSeen-a.firstSeen).forEach(c=>{
+    const d = new Date(c.firstSeen); const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    (byDay[key] = byDay[key] || {d, items:[]}).items.push(c);
+  });
+  let html = '';
+  Object.values(byDay).forEach(g=>{
+    html += `<div class="all-group-h">${MON[g.d.getMonth()]} ${g.d.getDate()}</div><div class="all-group-c">${g.items.length} 只</div><div class="all-grid">`;
+    g.items.forEach(c=>{
+      const thumb = c.thumbBlob || c.cutBlob;
+      html += `<div class="all-item" data-id="${c.id}"><div class="ph">${thumb?`<img class="die-cut" src="${objURL(thumb)}">`:'🐱'}</div>
+        <div class="cap"><span class="no">${no2(catNo(c))}</span>${escapeHtml(c.nickname)}</div></div>`;
+    });
+    html += `</div>`;
+  });
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('.all-item').forEach(el=> el.onclick = ()=> openDetail(el.dataset.id));
+}
+
 /* ============================ detail ============================ */
 let detailMap=null, detailMarker=null, currentDetailId=null;
 async function openDetail(id){
   const cat = await DB.get(id); if(!cat) return;
   currentDetailId = id;
+  rebuildNoMap();
   $('d-hero-img').src = objURL(cat.cutBlob || cat.thumbBlob);
-  const dt = $('d-title'); if(dt) dt.textContent = cat.nickname;
+  const dt = $('d-title'); if(dt) dt.textContent = `No. ${no2(catNo(cat))}`;
   $('d-name').textContent = cat.nickname;
-  $('d-breed').textContent = cat.breed + (cat.breedConf?` · 置信度 ${cat.breedConf}%`:'');
+  $('d-breed').textContent = `${cat.breed} · ${breedEN(cat.breed)}` + (cat.breedConf?` · ${cat.breedConf}%`:'');
   $('d-place').textContent = cat.place ? cat.place.label : '未定位';
   $('d-first').textContent = fmtDate(cat.firstSeen);
-  $('d-count').textContent = `${cat.count} 次`;
+  $('d-count').innerHTML = `<em>${cat.count}</em> 次`;
   go('detail');
   // mini map
   const wrap = $('d-map-wrap');
@@ -474,7 +512,7 @@ async function reencounter(){
   cat.encounters = cat.encounters||[]; cat.encounters.push({t, lat:loc?loc.lat:null, lng:loc?loc.lng:null});
   cat.count = (cat.count||1)+1; cat.lastSeen = t;
   await DB.put(cat); await refreshCats(); refreshAll();
-  $('d-count').textContent = `${cat.count} 次`;
+  $('d-count').innerHTML = `<em>${cat.count}</em> 次`;
   toast(`又见到啦 · 遇见 +1（共 ${cat.count} 次）`);
 }
 
@@ -518,7 +556,6 @@ function locateMe(){
 function renderStats(){
   const total = CATS.length;
   $('st-total').textContent = total;
-  $('st-lbl').textContent = total ? `你已经遇见了 ${total} 只猫` : '还没有遇见的猫';
   const cities = new Set(), breeds = {}; let enc=0;
   CATS.forEach(c=>{ if(c.place&&c.place.city) cities.add(c.place.city); enc += (c.count||1); breeds[c.breed]=(breeds[c.breed]||0)+1; });
   $('st-cities').textContent = cities.size;
@@ -530,16 +567,16 @@ function renderStats(){
   const arr = Object.entries(breeds).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const max = arr.length ? arr[0][1] : 1;
   bb.innerHTML = arr.length ? arr.map(([k,v])=>
-    `<div class="barrow"><span class="name">${escapeHtml(k)}</span><span class="track"><span class="fill" style="width:${Math.round(v/max*100)}%"></span></span><span class="val">${v}</span></div>`
-  ).join('') : `<div class="empty-note">还没有数据</div>`;
+    `<div class="barrow"><div class="bh"><span>${escapeHtml(k)}</span><span class="val">${v}</span></div><div class="track"><div class="fill" style="width:${Math.round(v/max*100)}%"></div></div></div>`
+  ).join('') : `<div class="sec-label" style="margin:0">还没有数据</div>`;
 
   // city ranks
   const cityCount = {}; CATS.forEach(c=>{ const city=c.place&&c.place.city; if(city) cityCount[city]=(cityCount[city]||0)+1; });
   const cr = $('st-city-ranks');
   const ranks = Object.entries(cityCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
   cr.innerHTML = ranks.length ? ranks.map(([city,n],i)=>
-    `<div class="rank"><span class="idx${i===0?' top':''}">${i+1}</span><span class="city">${escapeHtml(city)}</span><span class="c">${n} 只</span></div>`
-  ).join('') : `<div class="empty-note">还没有定位过的猫</div>`;
+    `<div class="rank"><span class="idx">${no2(i+1)}</span><span class="city">${escapeHtml(city)}</span><span class="c">${n} 只</span></div>`
+  ).join('') : `<div class="sec-label" style="margin:0">还没有定位过的猫</div>`;
 
   // monthly trend (last 6 months)
   const now = new Date(); const months=[]; const counts=[];
@@ -558,14 +595,19 @@ function go(id){
   if(id!=='cam') stopCamera();
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   const el = $('s-'+id); if(el) el.classList.add('active');
-  $('tabbar').style.display = tabScreens.includes(id) ? 'flex' : 'none';
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s===id));
+  const showChrome = tabScreens.includes(id);
+  $('tabbar').style.display = showChrome ? 'flex' : 'none';
+  $('shutter').style.display = showChrome ? 'flex' : 'none';
+  // map's 'me'/'stats' share highlight; keep book highlighted when on overview
+  const hi = (id==='all') ? 'book' : id;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s===hi));
   onEnter(id);
 }
 function onEnter(id){
   if(id==='map'){ initMap(); setTimeout(()=>{ if(map){ map.invalidateSize(); renderMap(); } }, 60); }
   else if(id==='cam'){ startCamera(); prewarmModels(); }
   else if(id==='book'){ renderCollection(); }
+  else if(id==='all'){ renderAll(); }
   else if(id==='stats'){ renderStats(); }
 }
 function refreshAll(){ updateStatPill(); if(map) renderMap(); }
