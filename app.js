@@ -53,6 +53,18 @@ function loadScript(src){
 const urlCache = new Set();
 function objURL(blob){ const u=URL.createObjectURL(blob); urlCache.add(u); return u; }
 
+// ---- image storage helpers ----
+// iOS Safari is unreliable storing Blobs in IndexedDB; store ArrayBuffer instead.
+function blobToRec(blob){ return blob.arrayBuffer().then(buf=>({buf, type:blob.type||'image/png'})); }
+function imgURLFrom(rec){
+  if(!rec) return '';
+  if(rec instanceof Blob) return objURL(rec);                       // legacy records
+  if(rec.buf) return objURL(new Blob([rec.buf], {type:rec.type||'image/png'}));
+  return '';
+}
+function catCutURL(cat){ return imgURLFrom(cat.cut || cat.cutBlob); }
+function catThumbURL(cat){ return imgURLFrom(cat.thumb || cat.thumbBlob || cat.cut || cat.cutBlob); }
+
 /* ============================ IndexedDB ============================ */
 const DB = (()=>{
   let dbp;
@@ -351,23 +363,25 @@ async function save(){
   const t = Date.now();
   let name = ($('new-name').value||'').trim();
   if(!name) name = '无名喵 ' + String(t).slice(-4);
-  const cat = {
-    id: 'c_'+t+'_'+Math.floor(Math.random()*1e4),
-    nickname: name,
-    breed: pending.breed || '未知',
-    breedConf: pending.cands && pending.cands[0] && !pending.cands[0].guess ? Math.round(pending.cands[0].prob*100) : null,
-    cutBlob: pending.cutBlob,
-    thumbBlob: pending.thumbBlob || pending.cutBlob,
-    lat: pending.loc ? pending.loc.lat : null,
-    lng: pending.loc ? pending.loc.lng : null,
-    place: pending.place || null,
-    firstSeen: t, lastSeen: t, count: 1,
-    encounters: [{t, lat:pending.loc?pending.loc.lat:null, lng:pending.loc?pending.loc.lng:null}],
-    note: ''
-  };
+  let cat;
   try{
-    // guard against IndexedDB hangs (seen on some iOS Safari versions)
-    await Promise.race([ DB.put(cat), new Promise((_,rej)=>setTimeout(()=>rej(new Error('保存超时')), 6000)) ]);
+    // store images as ArrayBuffer (Blobs in IndexedDB are unreliable on iOS Safari)
+    const cutRec = await blobToRec(pending.cutBlob);
+    const thumbRec = pending.thumbBlob ? await blobToRec(pending.thumbBlob) : cutRec;
+    cat = {
+      id: 'c_'+t+'_'+Math.floor(Math.random()*1e4),
+      nickname: name,
+      breed: pending.breed || '未知',
+      breedConf: pending.cands && pending.cands[0] && !pending.cands[0].guess ? Math.round(pending.cands[0].prob*100) : null,
+      cut: cutRec, thumb: thumbRec,
+      lat: pending.loc ? pending.loc.lat : null,
+      lng: pending.loc ? pending.loc.lng : null,
+      place: pending.place || null,
+      firstSeen: t, lastSeen: t, count: 1,
+      encounters: [{t, lat:pending.loc?pending.loc.lat:null, lng:pending.loc?pending.loc.lng:null}],
+      note: ''
+    };
+    await Promise.race([ DB.put(cat), new Promise((_,rej)=>setTimeout(()=>rej(new Error('保存超时')), 8000)) ]);
   }catch(e){
     saving = false;
     toast('保存失败：' + (e && e.message || e));
@@ -399,7 +413,7 @@ function cardTransform(off, dx, rot){
   return `translateY(${ty}px) translateX(${tx}px) scale(${scale})`;
 }
 function makeCard(cat, off){
-  const thumb = cat.thumbBlob || cat.cutBlob;
+  const thumb = catThumbURL(cat);
   const place = cat.place ? (cat.place.district || cat.place.city || '街角') : '街角';
   const n = catNo(cat);
   const card = document.createElement('div');
@@ -407,7 +421,7 @@ function makeCard(cat, off){
   card.style.zIndex = String(30 - off);
   card.style.transform = cardTransform(off, 0, 0);
   if(off>0) card.style.boxShadow = 'none';
-  card.innerHTML = `<div class="card-photo">${thumb?`<img class="die-cut" src="${objURL(thumb)}">`:'🐱'}<span class="card-no">${no2(n)}</span></div>
+  card.innerHTML = `<div class="card-photo">${thumb?`<img class="die-cut" src="${thumb}">`:'🐱'}<span class="card-no">${no2(n)}</span></div>
     <div class="card-name">No. ${no2(n)} — ${escapeHtml(cat.nickname)}</div>
     <div class="card-sub">${breedEN(cat.breed)} · ${escapeHtml(place)}</div>`;
   return card;
@@ -465,8 +479,8 @@ function renderAll(){
   Object.values(byDay).forEach(g=>{
     html += `<div class="all-group-h">${MON[g.d.getMonth()]} ${g.d.getDate()}</div><div class="all-group-c">${g.items.length} 只</div><div class="all-grid">`;
     g.items.forEach(c=>{
-      const thumb = c.thumbBlob || c.cutBlob;
-      html += `<div class="all-item" data-id="${c.id}"><div class="ph">${thumb?`<img class="die-cut" src="${objURL(thumb)}">`:'🐱'}</div>
+      const thumb = catThumbURL(c);
+      html += `<div class="all-item" data-id="${c.id}"><div class="ph">${thumb?`<img class="die-cut" src="${thumb}">`:'🐱'}</div>
         <div class="cap"><span class="no">${no2(catNo(c))}</span>${escapeHtml(c.nickname)}</div></div>`;
     });
     html += `</div>`;
@@ -481,7 +495,7 @@ async function openDetail(id){
   const cat = await DB.get(id); if(!cat) return;
   currentDetailId = id;
   rebuildNoMap();
-  $('d-hero-img').src = objURL(cat.cutBlob || cat.thumbBlob);
+  $('d-hero-img').src = catCutURL(cat);
   const dt = $('d-title'); if(dt) dt.textContent = `No. ${no2(catNo(cat))}`;
   $('d-name').textContent = cat.nickname;
   $('d-breed').textContent = `${cat.breed} · ${breedEN(cat.breed)}` + (cat.breedConf?` · ${cat.breedConf}%`:'');
@@ -519,9 +533,9 @@ async function reencounter(){
 /* ============================ map ============================ */
 let map=null, cluster=null;
 function catIcon(cat){
-  const thumb = cat.thumbBlob || cat.cutBlob;
-  const inner = thumb ? `<img src="${objURL(thumb)}">` : '🐱';
-  return L.divIcon({ className:'', html:`<div class="cat-marker">${inner}</div>`, iconSize:[46,46], iconAnchor:[23,23] });
+  const thumb = catThumbURL(cat);
+  const inner = thumb ? `<img src="${thumb}">` : '🐱';
+  return L.divIcon({ className:'', html:`<div class="cat-marker">${inner}</div>`, iconSize:[42,42], iconAnchor:[21,21] });
 }
 function initMap(){
   if(map || !window.L) return;
